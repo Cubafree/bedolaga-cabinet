@@ -11,7 +11,7 @@ import { checkRateLimit, getRateLimitResetTime, RATE_LIMIT_KEYS } from '../utils
 import type { TicketDetail } from '../types';
 import { PillButton } from '@/components/ui/PillButton';
 import { staggerContainer, staggerItem } from '@/components/motion/transitions';
-import { ChatIcon, CloseIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
+import { ArrowRightIcon, ChatIcon, CloseIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
 import { usePlatform } from '@/platform';
 import { cn } from '@/lib/utils';
 import { linkifyText } from '../utils/linkify';
@@ -410,33 +410,32 @@ export default function Support() {
       {/* Contact support card for "both" mode */}
       {supportConfig?.support_type === 'both' && supportConfig.support_username && (
         <motion.div variants={staggerItem}>
-          <div className={cn(cardClass, 'flex items-center justify-between gap-3')}>
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
-                <ChatIcon className="h-5 w-5" />
+          <button
+            type="button"
+            onClick={() => {
+              const username = supportConfig.support_username!.startsWith('@')
+                ? supportConfig.support_username!.slice(1)
+                : supportConfig.support_username!;
+              openTelegramLink(`https://t.me/${username}`);
+            }}
+            className={cn(
+              cardClass,
+              'flex w-full items-center gap-3 text-left transition-colors hover:border-accent-500/50',
+            )}
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
+              <ChatIcon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-champagne-900 dark:text-dark-50">
+                {t('support.contactUs')}
               </div>
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-champagne-900 dark:text-dark-50">
-                  {t('support.contactUs')}
-                </div>
-                <div className="truncate text-xs text-champagne-600 dark:text-dark-400">
-                  {supportConfig.support_username}
-                </div>
+              <div className="truncate text-xs text-champagne-600 dark:text-dark-400">
+                {supportConfig.support_username}
               </div>
             </div>
-            <PillButton
-              variant="soft"
-              fullWidth={false}
-              onClick={() => {
-                const username = supportConfig.support_username!.startsWith('@')
-                  ? supportConfig.support_username!.slice(1)
-                  : supportConfig.support_username!;
-                openTelegramLink(`https://t.me/${username}`);
-              }}
-            >
-              {t('support.contactUs')}
-            </PillButton>
-          </div>
+            <ArrowRightIcon className="h-5 w-5 shrink-0 text-champagne-400 dark:text-dark-500" />
+          </button>
         </motion.div>
       )}
 
