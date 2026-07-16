@@ -51,13 +51,16 @@ export const PillButton = forwardRef<HTMLButtonElement, PillButtonProps>(functio
     // drops 2px so it visually "lands" on the ledge.
     primary:
       'bg-accent-500 text-white shadow-cta-stacked hover:bg-accent-500 active:shadow-[0_4px_0_0_#B23A0E,0_8px_18px_-8px_rgba(255,90,31,0.5)]',
-    // Navy fill (install actions). Uses the ink token so it reads on cream.
-    dark: 'bg-champagne-900 text-white hover:bg-champagne-800',
-    // Low-emphasis outline pill.
+    // Navy fill (install actions). On dark the ink flips to a light fill so it
+    // stays a high-contrast secondary rather than navy-on-navy.
+    dark: 'bg-champagne-900 text-white hover:bg-champagne-800 dark:bg-dark-100 dark:text-dark-950 dark:hover:bg-white',
+    // Low-emphasis outline pill. Dark ink is invisible on the dark theme, so the
+    // border + text switch to the dark ramp.
     ghost:
-      'border border-champagne-300 bg-transparent text-champagne-900 hover:bg-champagne-100',
-    // Neutral filled secondary.
-    soft: 'bg-champagne-100 text-champagne-800 hover:bg-champagne-200 border border-champagne-300',
+      'border border-champagne-300 bg-transparent text-champagne-900 hover:bg-champagne-100 dark:border-dark-700 dark:text-dark-100 dark:hover:bg-dark-800',
+    // Neutral filled secondary. Cream fill reads as "disabled/greyed" on the dark
+    // theme, so it becomes a subtle dark-surface pill there.
+    soft: 'bg-champagne-100 text-champagne-800 hover:bg-champagne-200 border border-champagne-300 dark:bg-dark-800 dark:text-dark-100 dark:border-dark-700 dark:hover:bg-dark-700',
   };
 
   return (
