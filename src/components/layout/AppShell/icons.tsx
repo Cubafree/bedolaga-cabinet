@@ -22,4 +22,7 @@ export {
   ArrowRightIcon,
   DownloadIcon,
   PaletteIcon,
+  // Подключить-таб glyph (P0 connect slice — hi-fi §1.1).
+  PowerIcon,
+  RocketIcon,
 } from '../../icons';

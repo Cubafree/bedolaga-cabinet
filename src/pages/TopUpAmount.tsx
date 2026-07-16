@@ -2,19 +2,21 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 
 import { balanceApi } from '../api/balance';
 import { useCurrency } from '../hooks/useCurrency';
 import { checkRateLimit, getRateLimitResetTime, RATE_LIMIT_KEYS } from '../utils/rateLimit';
 import { useCloseOnSuccessNotification } from '../store/successNotification';
 import { useHaptic, usePlatform } from '@/platform';
-import { staggerContainer, staggerItem } from '@/components/motion/transitions';
+import { classifyPaymentMethod, humanPaymentMethodLabel } from '../utils/paymentMethodLabel';
 import type { PaymentMethod, PaymentMethodOption } from '../types';
-import BentoCard from '../components/ui/BentoCard';
+import { Kicker } from '@/components/ui/Kicker';
+import { PillButton } from '@/components/ui/PillButton';
+import { WebBackButton } from '../components/WebBackButton';
 import { saveTopUpPendingInfo } from '../utils/topUpStorage';
 import { getSafeRedirectPath } from '../utils/safeRedirect';
 import { copyToClipboard } from '@/utils/clipboard';
+import { cn } from '@/lib/utils';
 import {
   CardIcon,
   CheckIcon,
@@ -22,14 +24,14 @@ import {
   CryptoIcon,
   ExclamationIcon,
   ExternalLinkIcon,
-  SparklesIcon,
   StarIcon,
+  WalletIcon,
 } from '@/components/icons';
 
-const getMethodIcon = (methodId: string) => {
-  const id = methodId.toLowerCase();
-  if (id.includes('stars')) return <StarIcon />;
-  if (id.includes('crypto') || id.includes('ton') || id.includes('usdt')) return <CryptoIcon />;
+const getMethodIcon = (kind: string | null) => {
+  if (kind === 'stars') return <StarIcon />;
+  if (kind === 'crypto') return <CryptoIcon />;
+  if (kind === 'sbp') return <WalletIcon />;
   return <CardIcon />;
 };
 
@@ -216,9 +218,7 @@ export default function TopUpAmount() {
         // Save payment info for the result page (do BEFORE possible redirect,
         // иначе после window.location.href этот код не выполнится).
         if (method && data.payment_id) {
-          const methodKey = method.id.toLowerCase().replace(/-/g, '_');
-          const displayName =
-            t(`balance.paymentMethods.${methodKey}.name`, { defaultValue: '' }) || method.name;
+          const displayName = humanPaymentMethodLabel(method);
           saveTopUpPendingInfo({
             amount_kopeks: data.amount_kopeks,
             method_id: method.id,
@@ -285,9 +285,9 @@ export default function TopUpAmount() {
   const minRubles = method.min_amount_kopeks / 100;
   const maxRubles = method.max_amount_kopeks / 100;
   const methodKey = method.id.toLowerCase().replace(/-/g, '_');
-  const isStarsMethod = methodKey.includes('stars');
-  const methodName =
-    t(`balance.paymentMethods.${methodKey}.name`, { defaultValue: '' }) || method.name;
+  const methodKind = classifyPaymentMethod(method);
+  const isStarsMethod = methodKind === 'stars' || methodKey.includes('stars');
+  const methodName = humanPaymentMethodLabel(method);
 
   const handleSubmit = () => {
     setError(null);
@@ -366,207 +366,185 @@ export default function TopUpAmount() {
     }
   };
 
-  return (
-    <motion.div
-      className="mx-auto max-w-lg space-y-5"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-    >
-      {/* Header icon and method */}
-      <motion.div variants={staggerItem} className="flex items-center gap-4 pb-1">
-        <div
-          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-            isStarsMethod
-              ? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/20 text-yellow-400'
-              : 'bg-gradient-to-br from-accent-500/20 to-accent-600/20 text-accent-400'
-          }`}
-        >
-          <div className="flex h-7 w-7 items-center justify-center">{getMethodIcon(method.id)}</div>
-        </div>
-        <div className="flex-1">
-          <h3 className="text-lg font-bold text-dark-100">{methodName}</h3>
-          <p className="text-sm text-dark-400">
-            {formatAmount(minRubles, 0)} – {formatAmount(maxRubles, 0)} {currencySymbol}
-          </p>
-        </div>
-      </motion.div>
+  const amountValid = !!amount && parseFloat(amount) > 0;
 
-      {/* Payment options (if any) */}
+  return (
+    <div className="mx-auto max-w-lg space-y-6">
+      {/* Header: type glyph + human method label */}
+      <div>
+        <WebBackButton to="/balance/top-up" />
+        <div className="mt-2 flex items-center gap-4">
+          <span
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+              isStarsMethod ? 'bg-warning-400/15 text-warning-500' : 'bg-accent-500/12 text-accent-600',
+            )}
+          >
+            <span className="flex h-6 w-6 items-center justify-center">
+              {getMethodIcon(methodKind)}
+            </span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <Kicker className="mb-0.5">{t('balance.details.topupTitle')}</Kicker>
+            <h1 className="font-display text-xl font-bold text-champagne-900 dark:text-dark-50">
+              {methodName}
+            </h1>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment sub-options (if the method exposes several) */}
       {hasOptions && orderedOptions.length > 0 && (
-        <motion.div variants={staggerItem} className="space-y-2">
-          <label className="text-sm font-medium text-dark-400">{t('balance.paymentMethod')}</label>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2">
+          <label className="font-mono text-[11px] uppercase tracking-[0.18em] text-champagne-500">
+            {t('balance.details.methodTitle')}
+          </label>
+          <div className="grid grid-cols-2 gap-2.5">
             {orderedOptions.map((opt) => (
               <button
                 key={opt.id}
                 type="button"
                 onClick={() => setSelectedOption(opt.id)}
-                className={`relative rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                className={cn(
+                  'rounded-full px-4 py-3 text-sm font-semibold transition-colors',
                   selectedOption === opt.id
-                    ? 'bg-accent-500/15 text-accent-400 ring-2 ring-accent-500/40'
-                    : 'border border-dark-700/50 bg-dark-800/70 text-dark-300 hover:bg-dark-700/70'
-                }`}
+                    ? 'bg-accent-500/12 text-accent-600 ring-2 ring-accent-500/40'
+                    : 'border border-champagne-300 bg-champagne-100 text-champagne-700 hover:bg-champagne-200 dark:border-dark-700 dark:bg-dark-800/60 dark:text-dark-200',
+                )}
               >
                 {opt.name}
-                {selectedOption === opt.id && (
-                  <span className="absolute right-1.5 top-1.5">
-                    <span className="block h-2 w-2 rounded-full bg-accent-500" />
-                  </span>
-                )}
               </button>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* Amount input + Submit button - inline */}
-      <motion.div variants={staggerItem} className="space-y-2">
-        <label className="text-sm font-medium text-dark-400">{t('balance.enterAmount')}</label>
-        <div className="flex gap-2">
-          <div
-            className={`relative flex-1 rounded-2xl transition-all duration-200 ${
-              isInputFocused
-                ? 'bg-dark-800 ring-2 ring-accent-500/50'
-                : 'border border-dark-700/50 bg-dark-800/70'
-            }`}
-          >
-            <input
-              ref={inputRef}
-              type="number"
-              inputMode="decimal"
-              enterKeyHint="done"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              onFocus={() => setIsInputFocused(true)}
-              onBlur={() => setIsInputFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="0"
-              className="h-14 w-full bg-transparent px-4 pr-12 text-xl font-bold text-dark-100 placeholder:text-dark-600 focus:outline-none"
-              autoComplete="off"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-dark-500">
-              {currencySymbol}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isPending || !amount || parseFloat(amount) <= 0}
-            className={`flex h-14 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl px-6 text-base font-bold transition-colors duration-200 ${
-              isPending || !amount || parseFloat(amount) <= 0
-                ? 'cursor-not-allowed bg-dark-700 text-dark-500'
-                : isStarsMethod
-                  ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-yellow-500/25 hover:from-yellow-400 hover:to-orange-400 active:from-yellow-600 active:to-orange-600'
-                  : 'bg-accent-500 text-white shadow-lg shadow-accent-500/25 transition-colors hover:bg-accent-400 active:bg-accent-600'
-            }`}
-          >
-            {isPending ? (
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : (
-              <>
-                <SparklesIcon className="h-4 w-4" />
-                <span>{t('balance.topUp')}</span>
-              </>
-            )}
-          </button>
+      {/* Amount */}
+      <div className="space-y-2">
+        <label className="font-mono text-[11px] uppercase tracking-[0.18em] text-champagne-500">
+          {t('balance.details.amountTitle')}
+        </label>
+        <div
+          className={cn(
+            'relative rounded-2xl border bg-champagne-50 transition-all dark:bg-dark-900/60',
+            isInputFocused
+              ? 'border-accent-500 ring-2 ring-accent-500/30'
+              : 'border-champagne-300 dark:border-dark-700/40',
+          )}
+        >
+          <input
+            ref={inputRef}
+            type="number"
+            inputMode="decimal"
+            enterKeyHint="done"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="0"
+            className="h-16 w-full bg-transparent px-5 pr-14 font-display text-2xl font-extrabold text-champagne-900 placeholder:text-champagne-300 focus:outline-none dark:text-dark-50"
+            autoComplete="off"
+          />
+          <span className="absolute right-5 top-1/2 -translate-y-1/2 text-lg font-bold text-champagne-400">
+            {currencySymbol}
+          </span>
         </div>
-      </motion.div>
+        <p className="font-mono text-[11px] text-champagne-500">
+          {formatAmount(minRubles, 0)} – {formatAmount(maxRubles, 0)} {currencySymbol}
+        </p>
+      </div>
 
-      {/* Quick amount buttons */}
+      {/* Quick amounts */}
       {quickAmounts.length > 0 && (
-        <motion.div variants={staggerItem} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-4 gap-2.5">
           {quickAmounts.map((a) => {
             const val = getQuickValue(a);
             const isSelected = amount === val;
             return (
-              <BentoCard
+              <button
                 key={a}
-                as="button"
                 type="button"
                 onClick={() => {
                   setAmount(val);
                   inputRef.current?.blur();
                 }}
-                hover
-                glow={isSelected}
-                className={`flex flex-col items-center justify-center px-2 py-3 ${
-                  isSelected ? 'border-accent-500/50 bg-accent-500/10' : ''
-                }`}
+                className={cn(
+                  'rounded-2xl border px-2 py-3 text-center transition-colors',
+                  isSelected
+                    ? 'border-accent-500/40 bg-accent-500/12 text-accent-600'
+                    : 'border-champagne-300 bg-champagne-100 text-champagne-800 hover:bg-champagne-200 dark:border-dark-700 dark:bg-dark-800/60 dark:text-dark-200',
+                )}
               >
-                <span
-                  className={`text-base font-bold ${isSelected ? 'text-accent-400' : 'text-dark-200'}`}
-                >
-                  {formatAmount(a, 0)}
-                </span>
-                <span
-                  className={`mt-0.5 text-xs ${isSelected ? 'text-accent-400/70' : 'text-dark-500'}`}
-                >
-                  {currencySymbol}
-                </span>
-              </BentoCard>
+                <span className="text-[15px] font-bold">{formatAmount(a, 0)}</span>
+              </button>
             );
           })}
-        </motion.div>
+        </div>
       )}
 
-      {/* Error message */}
+      {/* Pay */}
+      <PillButton
+        variant="primary"
+        loading={isPending}
+        disabled={!amountValid}
+        onClick={handleSubmit}
+      >
+        {amountValid
+          ? t('balance.details.pay', { amount: `${amount} ${currencySymbol}` })
+          : t('balance.details.topup')}
+      </PillButton>
+
+      {/* Error */}
       {error && (
-        <motion.div
-          variants={staggerItem}
-          className="flex items-center gap-2 rounded-xl border border-error-500/20 bg-error-500/10 p-3"
-        >
-          <ExclamationIcon className="h-5 w-5 shrink-0 text-error-400" />
-          <span className="text-sm text-error-400">{error}</span>
-        </motion.div>
+        <div className="flex items-center gap-2 rounded-xl border border-error-500/30 bg-error-500/10 p-3">
+          <ExclamationIcon className="h-5 w-5 shrink-0 text-error-500" />
+          <span className="text-sm text-error-500">{error}</span>
+        </div>
       )}
 
-      {/* Payment link display - shown when URL is received */}
+      {/* Payment link panel */}
       {paymentUrl && (
-        <motion.div
-          variants={staggerItem}
-          className="space-y-3 rounded-2xl border border-success-500/20 bg-success-500/10 p-4"
-        >
-          <div className="flex items-center gap-2 text-success-400">
+        <div className="space-y-3 rounded-bento border border-success-500/30 bg-success-500/10 p-4">
+          <div className="flex items-center gap-2 text-success-600">
             <CheckIcon className="h-5 w-5" />
             <span className="font-semibold">{t('balance.paymentReady')}</span>
           </div>
-
-          <p className="text-sm text-dark-400">{t('balance.clickToOpenPayment')}</p>
-
-          <button
-            type="button"
+          <p className="text-sm text-champagne-700 dark:text-dark-300">
+            {t('balance.clickToOpenPayment')}
+          </p>
+          <PillButton
+            variant="dark"
+            leadingIcon={<ExternalLinkIcon className="h-5 w-5" />}
             onClick={handleOpenPayment}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-success-500 font-bold text-white transition-colors hover:bg-success-400 active:bg-success-600"
           >
-            <ExternalLinkIcon />
-            <span>{t('balance.openPaymentPage')}</span>
-          </button>
-
+            {t('balance.openPaymentPage')}
+          </PillButton>
           <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1 rounded-lg border border-dark-700/50 bg-dark-800/70 px-3 py-2">
-              <p className="truncate text-xs text-dark-500">{paymentUrl}</p>
+            <div className="min-w-0 flex-1 rounded-lg border border-champagne-300 bg-champagne-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900/60">
+              <p className="truncate text-xs text-champagne-500">{paymentUrl}</p>
             </div>
             <button
               type="button"
               onClick={handleCopyUrl}
-              className={`shrink-0 rounded-lg p-2.5 transition-colors ${
+              className={cn(
+                'shrink-0 rounded-lg p-2.5 transition-colors',
                 copied
-                  ? 'bg-success-500/20 text-success-400'
-                  : 'bg-dark-800/70 text-dark-400 hover:bg-dark-700 hover:text-dark-200'
-              }`}
+                  ? 'bg-success-500/20 text-success-600'
+                  : 'bg-champagne-100 text-champagne-500 hover:bg-champagne-200 dark:bg-dark-800/60',
+              )}
               title={t('common.copy')}
             >
               {copied ? <CheckIcon className="h-5 w-5" /> : <CopyIcon className="h-5 w-5" />}
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 }

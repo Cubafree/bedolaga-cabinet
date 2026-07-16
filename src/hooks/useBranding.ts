@@ -11,7 +11,9 @@ import {
 } from '@/api/branding';
 import { setFavicon, letterFaviconDataUri, roundedFaviconDataUri } from '@/utils/favicon';
 
-const FALLBACK_NAME = import.meta.env.VITE_APP_NAME || 'Cabinet';
+// Brand default when VITE_APP_NAME is unset — the RocketJump brand, never the
+// generic word "Cabinet" (A2). appName still comes from the branding endpoint.
+const FALLBACK_NAME = import.meta.env.VITE_APP_NAME || 'RocketJump';
 const FALLBACK_LOGO = import.meta.env.VITE_APP_LOGO || 'V';
 
 export function useBranding() {
@@ -33,7 +35,8 @@ export function useBranding() {
     enabled: isAuthenticated,
   });
 
-  const appName = branding ? branding.name : FALLBACK_NAME;
+  // Fall back to the brand default when branding.name is empty/undefined (A2).
+  const appName = branding?.name || FALLBACK_NAME;
   const logoLetter = branding?.logo_letter || FALLBACK_LOGO;
   const hasCustomLogo = branding?.has_custom_logo || false;
   const logoUrl = branding ? brandingApi.getLogoUrl(branding) : null;

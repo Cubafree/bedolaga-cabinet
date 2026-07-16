@@ -25,27 +25,23 @@ import TicketNotificationBell from '@/components/TicketNotificationBell';
 // Icons
 import {
   HomeIcon,
+  PowerIcon,
   SubscriptionIcon,
-  WalletIcon,
-  UsersIcon,
   ChatIcon,
   UserIcon,
   LogoutIcon,
-  GamepadIcon,
-  ClipboardIcon,
-  InfoIcon,
   CogIcon,
-  WheelIcon,
-  GiftIcon,
   MenuIcon,
   CloseIcon,
   SunIcon,
   MoonIcon,
   SearchIcon,
+  RocketIcon,
 } from './icons';
 
-const FALLBACK_NAME = import.meta.env.VITE_APP_NAME || 'Cabinet';
-const FALLBACK_LOGO = import.meta.env.VITE_APP_LOGO || 'V';
+// Brand default when VITE_APP_NAME is unset — the RocketJump brand, never the
+// generic word "Cabinet" (A2). appName still comes from useBranding()/branding.
+const FALLBACK_NAME = import.meta.env.VITE_APP_NAME || 'RocketJump';
 
 import type { TelegramPlatform } from '@/hooks/useTelegramSDK';
 
@@ -74,11 +70,6 @@ export function AppHeader({
   safeAreaInset,
   contentSafeAreaInset,
   telegramPlatform,
-  wheelEnabled,
-  referralEnabled,
-  hasContests,
-  hasPolls,
-  giftEnabled,
 }: AppHeaderProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -106,8 +97,9 @@ export function AppHeader({
     retry: 1,
   });
 
-  const appName = branding ? branding.name : FALLBACK_NAME;
-  const logoLetter = branding?.logo_letter || FALLBACK_LOGO;
+  // Fall back to the brand default when branding.name is empty/undefined (A2) —
+  // never render an empty header or the generic "Cabinet".
+  const appName = branding?.name || FALLBACK_NAME;
   const hasCustomLogo = branding?.has_custom_logo || false;
   const logoUrl = branding ? brandingApi.getLogoUrl(branding) : null;
 
@@ -157,19 +149,18 @@ export function AppHeader({
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
+  // Admin entry hidden from cabinet UI — admins reach /admin by direct URL.
+  const ADMIN_NAV_VISIBLE = false;
   const isAdminActive = () => location.pathname.startsWith('/admin');
 
+  // Mobile drawer mirrors the fixed 5-tab spine. HIDE features (Wheel/Contests/
+  // Polls) must not appear on ANY nav surface (IA §1.2), so they are gone here too.
   const navItems = [
-    { path: '/', label: t('nav.dashboard'), icon: HomeIcon },
-    { path: '/subscriptions', label: t('nav.subscription'), icon: SubscriptionIcon },
-    { path: '/balance', label: t('nav.balance'), icon: WalletIcon },
-    ...(referralEnabled ? [{ path: '/referral', label: t('nav.referral'), icon: UsersIcon }] : []),
-    { path: '/support', label: t('nav.support'), icon: ChatIcon },
-    ...(hasContests ? [{ path: '/contests', label: t('nav.contests'), icon: GamepadIcon }] : []),
-    ...(hasPolls ? [{ path: '/polls', label: t('nav.polls'), icon: ClipboardIcon }] : []),
-    ...(wheelEnabled ? [{ path: '/wheel', label: t('nav.wheel'), icon: WheelIcon }] : []),
-    ...(giftEnabled ? [{ path: '/gift', label: t('nav.gift'), icon: GiftIcon }] : []),
-    { path: '/info', label: t('nav.info'), icon: InfoIcon },
+    { path: '/', label: t('nav.home'), icon: HomeIcon },
+    { path: '/connect', label: t('nav.connect'), icon: PowerIcon },
+    { path: '/subscription', label: t('nav.subscription'), icon: SubscriptionIcon },
+    { path: '/help', label: t('nav.help'), icon: ChatIcon },
+    { path: '/account', label: t('nav.account'), icon: UserIcon },
   ];
 
   return (
@@ -192,18 +183,13 @@ export function AppHeader({
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
-              className={cn('flex flex-shrink-0 items-center gap-2.5', !appName && 'mr-4')}
+              className="flex flex-shrink-0 items-center gap-2.5"
             >
-              <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-linear-lg border border-dark-700/50 bg-dark-800/80 shadow-md">
-                <span
-                  className={cn(
-                    'absolute text-lg font-bold text-accent-400 transition-opacity duration-200',
-                    hasCustomLogo && logoLoaded ? 'opacity-0' : 'opacity-100',
-                  )}
-                >
-                  {logoLetter}
-                </span>
-                {hasCustomLogo && logoUrl && (
+              {/* Brand mark — RocketIcon in an accent square, matching the desktop
+                  header (AppShell). The custom-logo override still wins: a configured
+                  logo renders in place of the rocket (A2). */}
+              <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-linear-lg bg-accent-500 text-white shadow-md">
+                {hasCustomLogo && logoUrl ? (
                   <img
                     src={logoUrl}
                     alt={appName || 'Logo'}
@@ -213,13 +199,13 @@ export function AppHeader({
                     )}
                     onLoad={() => setLogoLoaded(true)}
                   />
+                ) : (
+                  <RocketIcon className="h-6 w-6" />
                 )}
               </div>
-              {appName && (
-                <span className="whitespace-nowrap text-base font-semibold text-dark-100">
-                  {appName}
-                </span>
-              )}
+              <span className="whitespace-nowrap text-base font-semibold text-champagne-900 dark:text-dark-100">
+                {appName}
+              </span>
             </Link>
 
             {/* Right side */}
@@ -368,7 +354,7 @@ export function AppHeader({
                   </Link>
                 ))}
 
-                {isAdmin && (
+                {ADMIN_NAV_VISIBLE && isAdmin && (
                   <>
                     <div className="divider my-3" />
                     <div className="px-4 py-1 text-xs font-medium uppercase tracking-wider text-dark-500">
@@ -393,12 +379,12 @@ export function AppHeader({
                 <div className="divider my-3" />
 
                 <Link
-                  to="/profile"
+                  to="/account"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={isActive('/profile') ? 'nav-item-active' : 'nav-item'}
+                  className={isActive('/account') ? 'nav-item-active' : 'nav-item'}
                 >
                   <UserIcon className="h-5 w-5" />
-                  {t('nav.profile')}
+                  {t('nav.account')}
                 </Link>
 
                 <button

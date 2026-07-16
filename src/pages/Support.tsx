@@ -9,14 +9,57 @@ import { useAuthStore } from '../store/auth';
 import { logger } from '../utils/logger';
 import { checkRateLimit, getRateLimitResetTime, RATE_LIMIT_KEYS } from '../utils/rateLimit';
 import type { TicketDetail } from '../types';
-import { Card } from '@/components/data-display/Card';
-import { Button } from '@/components/primitives/Button';
+import { PillButton } from '@/components/ui/PillButton';
 import { staggerContainer, staggerItem } from '@/components/motion/transitions';
 import { ChatIcon, CloseIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
 import { usePlatform } from '@/platform';
+import { cn } from '@/lib/utils';
 import { linkifyText } from '../utils/linkify';
 
 const log = logger.createLogger('Support');
+
+/**
+ * Shared champagne surface recipe — matches HelpPage / SubscriptionDetail.
+ * (The dark-hardcoded `Card` primitive is intentionally NOT used here: it renders
+ * dark tiles in both themes, which is exactly the readability bug being fixed.)
+ */
+const cardClass =
+  'rounded-bento border border-champagne-300 bg-champagne-50 p-5 dark:border-dark-800 dark:bg-dark-900 sm:p-6';
+
+/** Ticket-status tones, following the redesign's status-color conventions. */
+const STATUS_TONE: Record<string, { chip: string; dot: string }> = {
+  open: {
+    chip: 'border-accent-500/20 bg-accent-500/10 text-accent-600 dark:text-accent-400',
+    dot: 'bg-accent-500',
+  },
+  answered: {
+    chip: 'border-success-500/20 bg-success-500/10 text-success-600 dark:text-success-400',
+    dot: 'bg-success-500',
+  },
+  pending: {
+    chip: 'border-warning-500/25 bg-warning-500/10 text-warning-600 dark:text-warning-400',
+    dot: 'bg-warning-400',
+  },
+  closed: {
+    chip: 'border-champagne-300 bg-champagne-100 text-champagne-600 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400',
+    dot: 'bg-champagne-400 dark:bg-dark-500',
+  },
+};
+
+function StatusChip({ status, label }: { status: string; label: string }) {
+  const tone = STATUS_TONE[status] ?? STATUS_TONE.closed;
+  return (
+    <span
+      className={cn(
+        'inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+        tone.chip,
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
 
 // Media attachment state
 interface MediaAttachment {
@@ -41,6 +84,9 @@ export default function Support() {
   const [newMessage, setNewMessage] = useState('');
   const [replyMessage, setReplyMessage] = useState('');
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  // Server-side submit error (create/reply). Rendered in the same box style as
+  // rateLimitError; kept separate so client rate-limit vs server errors stay distinct.
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Media attachment states (multi-upload, up to 10)
   const [createAttachments, setCreateAttachments] = useState<MediaAttachment[]>([]);
@@ -123,6 +169,20 @@ export default function Support() {
     }
   };
 
+  // Parse an axios-style error from create/reply into a user-facing RU message.
+  const parseSubmitError = (error: unknown): string => {
+    const err = error as
+      | { response?: { status?: number; data?: { detail?: unknown; code?: string } } }
+      | undefined;
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    if (status === 429) return t('support.errorRateLimit');
+    if (status === 503 || data?.code === 'maintenance') return t('support.errorMaintenance');
+    const detail = data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    return t('support.errorGeneric');
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const ready = createAttachments.filter((a) => a.fileId) as Array<{ fileId: string }>;
@@ -137,6 +197,7 @@ export default function Support() {
       return ticketsApi.createTicket(newTitle, newMessage, media);
     },
     onSuccess: (ticket) => {
+      setSubmitError(null);
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       setShowCreateForm(false);
       setNewTitle('');
@@ -144,6 +205,8 @@ export default function Support() {
       clearCreateAttachments();
       setSelectedTicket(ticket);
     },
+    // Keep the typed subject/message/attachments intact — only surface the error.
+    onError: (error) => setSubmitError(parseSubmitError(error)),
   });
 
   const replyMutation = useMutation({
@@ -160,26 +223,14 @@ export default function Support() {
       await ticketsApi.addMessage(selectedTicket!.id, replyMessage, media);
     },
     onSuccess: () => {
+      setSubmitError(null);
       queryClient.invalidateQueries({ queryKey: ['ticket', selectedTicket?.id] });
       setReplyMessage('');
       clearReplyAttachments();
     },
+    // Keep the typed reply/attachments intact — only surface the error.
+    onError: (error) => setSubmitError(parseSubmitError(error)),
   });
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'open':
-        return 'badge-info';
-      case 'answered':
-        return 'badge-success';
-      case 'pending':
-        return 'badge-warning';
-      case 'closed':
-        return 'badge-neutral';
-      default:
-        return 'badge-neutral';
-    }
-  };
 
   const getStatusLabel = (status: string) => {
     return t(`support.status.${status}`) || status;
@@ -264,16 +315,18 @@ export default function Support() {
 
     return (
       <div className="mx-auto mt-12 max-w-md">
-        <Card className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-dark-800">
-            <ChatIcon className="h-8 w-8 text-dark-400" />
+        <div className={cn(cardClass, 'text-center')}>
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-600">
+            <ChatIcon className="h-8 w-8" />
           </div>
-          <h2 className="mb-2 text-xl font-semibold text-dark-100">{supportMessage.title}</h2>
-          <p className="mb-6 text-dark-400">{supportMessage.message}</p>
-          <Button onClick={supportMessage.buttonAction} fullWidth>
+          <h2 className="mb-2 font-display text-xl font-bold text-champagne-900 dark:text-dark-50">
+            {supportMessage.title}
+          </h2>
+          <p className="mb-6 text-champagne-700 dark:text-dark-300">{supportMessage.message}</p>
+          <PillButton variant="primary" onClick={supportMessage.buttonAction}>
             {supportMessage.buttonText}
-          </Button>
-        </Card>
+          </PillButton>
+        </div>
       </div>
     );
   }
@@ -295,27 +348,27 @@ export default function Support() {
                 src={att.preview}
                 alt="Preview"
                 loading="lazy"
-                className="h-16 w-16 rounded-lg border border-dark-700 object-cover"
+                className="h-16 w-16 rounded-lg border border-champagne-300 object-cover dark:border-dark-700"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-dark-700 text-xs text-dark-400">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-champagne-100 text-xs text-champagne-600 dark:bg-dark-700 dark:text-dark-400">
                 {att.file.name.slice(-6)}
               </div>
             )}
             {att.uploading && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-dark-950/50">
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-champagne-50/70 dark:bg-dark-950/50">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
               </div>
             )}
             {att.error && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-error-500/30">
-                <span className="text-xs text-error-300">!</span>
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-error-500/25">
+                <span className="text-xs font-semibold text-error-600 dark:text-error-300">!</span>
               </div>
             )}
             <button
               type="button"
               onClick={() => onRemove(idx)}
-              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-dark-600 text-dark-300 hover:bg-error-500 hover:text-white"
+              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-champagne-200 text-champagne-600 hover:bg-error-500 hover:text-white dark:bg-dark-600 dark:text-dark-300"
             >
               <CloseIcon className="h-4 w-4" />
             </button>
@@ -335,34 +388,45 @@ export default function Support() {
         variants={staggerItem}
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">{t('support.title')}</h1>
-        <Button
+        <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50 sm:text-3xl">
+          {t('support.title')}
+        </h1>
+        <PillButton
+          variant="primary"
+          fullWidth={false}
+          leadingIcon={<PlusIcon />}
           onClick={() => {
             setShowCreateForm(true);
             setSelectedTicket(null);
+            setSubmitError(null);
+            setRateLimitError(null);
             clearCreateAttachments();
           }}
         >
-          <PlusIcon />
-          <span className="ml-2">{t('support.newTicket')}</span>
-        </Button>
+          {t('support.newTicket')}
+        </PillButton>
       </motion.div>
 
       {/* Contact support card for "both" mode */}
       {supportConfig?.support_type === 'both' && supportConfig.support_username && (
         <motion.div variants={staggerItem}>
-          <Card className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-dark-800">
-                <ChatIcon className="h-5 w-5 text-dark-400" />
+          <div className={cn(cardClass, 'flex items-center justify-between gap-3')}>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
+                <ChatIcon className="h-5 w-5" />
               </div>
-              <div>
-                <div className="text-sm font-medium text-dark-100">{t('support.contactUs')}</div>
-                <div className="text-xs text-dark-400">{supportConfig.support_username}</div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-champagne-900 dark:text-dark-50">
+                  {t('support.contactUs')}
+                </div>
+                <div className="truncate text-xs text-champagne-600 dark:text-dark-400">
+                  {supportConfig.support_username}
+                </div>
               </div>
             </div>
-            <Button
-              variant="secondary"
+            <PillButton
+              variant="soft"
+              fullWidth={false}
               onClick={() => {
                 const username = supportConfig.support_username!.startsWith('@')
                   ? supportConfig.support_username!.slice(1)
@@ -371,15 +435,17 @@ export default function Support() {
               }}
             >
               {t('support.contactUs')}
-            </Button>
-          </Card>
+            </PillButton>
+          </div>
         </motion.div>
       )}
 
       <motion.div variants={staggerItem} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Tickets List */}
-        <Card className="lg:col-span-1">
-          <h2 className="mb-4 text-lg font-semibold text-dark-100">{t('support.yourTickets')}</h2>
+        <div className={cn(cardClass, 'lg:col-span-1')}>
+          <h2 className="mb-4 font-display text-lg font-bold text-champagne-900 dark:text-dark-50">
+            {t('support.yourTickets')}
+          </h2>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -393,21 +459,24 @@ export default function Support() {
                   onClick={() => {
                     setSelectedTicket(ticket as unknown as TicketDetail);
                     setShowCreateForm(false);
+                    setSubmitError(null);
+                    setRateLimitError(null);
                     clearReplyAttachments();
                   }}
-                  className={`w-full rounded-bento border p-4 text-left transition-all ${
+                  className={cn(
+                    'w-full rounded-bento border p-4 text-left transition-all',
                     selectedTicket?.id === ticket.id
                       ? 'border-accent-500 bg-accent-500/10'
-                      : 'border-dark-700/50 bg-dark-800/30 hover:border-dark-600'
-                  }`}
+                      : 'border-champagne-300 bg-champagne-100/60 hover:border-champagne-400 dark:border-dark-700/50 dark:bg-dark-800/30 dark:hover:border-dark-600',
+                  )}
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="truncate font-medium text-dark-100">{ticket.title}</div>
-                    <span className={`${getStatusBadge(ticket.status)} flex-shrink-0`}>
-                      {getStatusLabel(ticket.status)}
-                    </span>
+                    <div className="truncate font-medium text-champagne-900 dark:text-dark-100">
+                      {ticket.title}
+                    </div>
+                    <StatusChip status={ticket.status} label={getStatusLabel(ticket.status)} />
                   </div>
-                  <div className="text-xs text-dark-500">
+                  <div className="text-xs text-champagne-500 dark:text-dark-500">
                     {new Date(ticket.updated_at).toLocaleDateString()}
                   </div>
                 </button>
@@ -415,25 +484,26 @@ export default function Support() {
             </div>
           ) : (
             <div className="py-12 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-dark-800">
-                <ChatIcon className="h-8 w-8 text-dark-500" />
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-champagne-100 text-champagne-400 dark:bg-dark-800 dark:text-dark-500">
+                <ChatIcon className="h-8 w-8" />
               </div>
-              <div className="text-dark-400">{t('support.noTickets')}</div>
+              <div className="text-champagne-600 dark:text-dark-400">{t('support.noTickets')}</div>
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Ticket Detail / Create Form */}
-        <Card className="lg:col-span-2">
+        <div className={cn(cardClass, 'lg:col-span-2')}>
           {showCreateForm ? (
             <div>
-              <h2 className="mb-6 text-lg font-semibold text-dark-100">
+              <h2 className="mb-6 font-display text-lg font-bold text-champagne-900 dark:text-dark-50">
                 {t('support.createTicket')}
               </h2>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   setRateLimitError(null);
+                  setSubmitError(null);
                   // Rate limit: max 3 tickets per 60 seconds
                   if (!checkRateLimit(RATE_LIMIT_KEYS.TICKET_CREATE, 3, 60000)) {
                     const resetTime = getRateLimitResetTime(RATE_LIMIT_KEYS.TICKET_CREATE);
@@ -505,7 +575,7 @@ export default function Support() {
                       type="button"
                       onClick={() => createFileInputRef.current?.click()}
                       disabled={createAttachments.some((a) => a.uploading)}
-                      className="mt-2 flex items-center gap-2 text-sm text-dark-400 transition-colors hover:text-dark-200 disabled:opacity-50"
+                      className="mt-2 flex items-center gap-2 text-sm text-champagne-600 transition-colors hover:text-champagne-900 disabled:opacity-50 dark:text-dark-400 dark:hover:text-dark-200"
                     >
                       <ImageIcon />
                       {t('support.attachImage')}{' '}
@@ -514,46 +584,52 @@ export default function Support() {
                   )}
                 </div>
 
-                {rateLimitError && (
-                  <div className="rounded-xl border border-error-500/30 bg-error-500/10 p-3 text-sm text-error-400">
-                    {rateLimitError}
+                {(rateLimitError || submitError) && (
+                  <div className="rounded-xl border border-error-500/30 bg-error-500/10 p-3 text-sm text-error-600 dark:text-error-400">
+                    {rateLimitError || submitError}
                   </div>
                 )}
 
                 <div className="flex gap-3">
-                  <Button
+                  <PillButton
                     type="submit"
+                    variant="primary"
+                    fullWidth={false}
                     disabled={createAttachments.some((a) => a.uploading)}
                     loading={createMutation.isPending}
+                    leadingIcon={<SendIcon className="h-4 w-4" />}
                   >
-                    <SendIcon className="h-4 w-4" />
-                    <span className="ml-2">{t('support.send')}</span>
-                  </Button>
-                  <Button
+                    {t('support.send')}
+                  </PillButton>
+                  <PillButton
                     type="button"
-                    variant="secondary"
+                    variant="ghost"
+                    fullWidth={false}
                     onClick={() => {
                       setShowCreateForm(false);
+                      setSubmitError(null);
+                      setRateLimitError(null);
                       clearCreateAttachments();
                     }}
                   >
                     {t('common.cancel')}
-                  </Button>
+                  </PillButton>
                 </div>
               </form>
             </div>
           ) : selectedTicket ? (
             <div className="flex h-full flex-col">
-              <div className="mb-6 flex flex-col gap-2 border-b border-dark-800/50 pb-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="mb-6 flex flex-col gap-2 border-b border-champagne-200 pb-4 dark:border-dark-800 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-dark-100">
+                  <h2 className="font-display text-lg font-bold text-champagne-900 dark:text-dark-50">
                     {ticketDetail?.title || selectedTicket.title}
                   </h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className={getStatusBadge(ticketDetail?.status || selectedTicket.status)}>
-                      {getStatusLabel(ticketDetail?.status || selectedTicket.status)}
-                    </span>
-                    <span className="text-xs text-dark-500">
+                    <StatusChip
+                      status={ticketDetail?.status || selectedTicket.status}
+                      label={getStatusLabel(ticketDetail?.status || selectedTicket.status)}
+                    />
+                    <span className="text-xs text-champagne-500 dark:text-dark-500">
                       {t('support.created')}{' '}
                       {new Date(selectedTicket.created_at).toLocaleDateString()}
                     </span>
@@ -571,25 +647,31 @@ export default function Support() {
                   {ticketDetail.messages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`rounded-xl p-4 ${
+                      className={cn(
+                        'rounded-xl border p-4',
                         msg.is_from_admin
-                          ? 'ml-4 border border-accent-500/20 bg-accent-500/10'
-                          : 'mr-4 border border-dark-700/30 bg-dark-800/50'
-                      }`}
+                          ? 'ml-4 border-accent-500/20 bg-accent-500/10'
+                          : 'mr-4 border-champagne-300 bg-champagne-100 dark:border-dark-700/40 dark:bg-dark-800/50',
+                      )}
                     >
                       <div className="mb-2 flex items-center justify-between">
                         <span
-                          className={`text-xs font-medium ${msg.is_from_admin ? 'text-accent-400' : 'text-dark-400'}`}
+                          className={cn(
+                            'text-xs font-medium',
+                            msg.is_from_admin
+                              ? 'text-accent-600 dark:text-accent-400'
+                              : 'text-champagne-600 dark:text-dark-400',
+                          )}
                         >
                           {msg.is_from_admin ? t('support.supportTeam') : t('support.you')}
                         </span>
-                        <span className="text-xs text-dark-500">
+                        <span className="text-xs text-champagne-500 dark:text-dark-500">
                           {new Date(msg.created_at).toLocaleString()}
                         </span>
                       </div>
                       {msg.message_text && (
                         <div
-                          className="whitespace-pre-wrap text-dark-200 [&_a]:text-accent-400 [&_a]:underline"
+                          className="whitespace-pre-wrap text-champagne-800 [&_a]:text-accent-600 [&_a]:underline dark:text-dark-200 dark:[&_a]:text-accent-400"
                           dangerouslySetInnerHTML={{ __html: linkifyText(msg.message_text) }}
                         />
                       )}
@@ -609,6 +691,7 @@ export default function Support() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     setRateLimitError(null);
+                    setSubmitError(null);
                     // Rate limit: max 5 replies per 30 seconds
                     if (!checkRateLimit(RATE_LIMIT_KEYS.TICKET_REPLY, 5, 30000)) {
                       const resetTime = getRateLimitResetTime(RATE_LIMIT_KEYS.TICKET_REPLY);
@@ -617,7 +700,7 @@ export default function Support() {
                     }
                     replyMutation.mutate();
                   }}
-                  className="border-t border-dark-800/50 pt-4"
+                  className="border-t border-champagne-200 pt-4 dark:border-dark-800"
                 >
                   <div className="space-y-3">
                     <div className="flex gap-3">
@@ -661,7 +744,7 @@ export default function Support() {
                           type="button"
                           onClick={() => replyFileInputRef.current?.click()}
                           disabled={replyAttachments.some((a) => a.uploading)}
-                          className="flex items-center gap-2 text-sm text-dark-400 transition-colors hover:text-dark-200 disabled:opacity-50"
+                          className="flex items-center gap-2 text-sm text-champagne-600 transition-colors hover:text-champagne-900 disabled:opacity-50 dark:text-dark-400 dark:hover:text-dark-200"
                         >
                           <ImageIcon />
                           {t('support.attachImage')}{' '}
@@ -669,21 +752,25 @@ export default function Support() {
                         </button>
                       )}
 
-                      <Button
+                      <PillButton
                         type="submit"
+                        variant="primary"
+                        fullWidth={false}
+                        aria-label={t('support.sendReply')}
                         disabled={
                           (!replyMessage.trim() &&
                             replyAttachments.filter((a) => a.fileId).length === 0) ||
                           replyAttachments.some((a) => a.uploading)
                         }
                         loading={replyMutation.isPending}
+                        leadingIcon={<SendIcon className="h-4 w-4" />}
                       >
-                        <SendIcon className="h-4 w-4" />
-                      </Button>
+                        {t('support.send')}
+                      </PillButton>
                     </div>
-                    {rateLimitError && (
-                      <div className="mt-2 rounded-lg border border-error-500/30 bg-error-500/10 p-2 text-sm text-error-400">
-                        {rateLimitError}
+                    {(rateLimitError || submitError) && (
+                      <div className="mt-2 rounded-lg border border-error-500/30 bg-error-500/10 p-2 text-sm text-error-600 dark:text-error-400">
+                        {rateLimitError || submitError}
                       </div>
                     )}
                   </div>
@@ -691,16 +778,16 @@ export default function Support() {
               )}
 
               {ticketDetail?.is_reply_blocked && (
-                <div className="border-t border-dark-800/50 py-4 text-center text-sm text-dark-500">
+                <div className="border-t border-champagne-200 py-4 text-center text-sm text-champagne-500 dark:border-dark-800 dark:text-dark-500">
                   {t('support.repliesDisabled')}
                 </div>
               )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-dark-800">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-champagne-100 text-champagne-400 dark:bg-dark-800 dark:text-dark-500">
                 <svg
-                  className="h-8 w-8 text-dark-500"
+                  className="h-8 w-8"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -713,10 +800,12 @@ export default function Support() {
                   />
                 </svg>
               </div>
-              <div className="text-dark-400">{t('support.selectTicket')}</div>
+              <div className="text-champagne-600 dark:text-dark-400">
+                {t('support.selectTicket')}
+              </div>
             </div>
           )}
-        </Card>
+        </div>
       </motion.div>
     </motion.div>
   );

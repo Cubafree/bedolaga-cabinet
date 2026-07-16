@@ -1,13 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
 
 import { balanceApi } from '../api/balance';
 import { useCurrency } from '../hooks/useCurrency';
-import { Card } from '@/components/data-display/Card';
-import { staggerContainer, staggerItem } from '@/components/motion/transitions';
-import PaymentMethodIcon from '@/components/PaymentMethodIcon';
+import {
+  classifyPaymentMethod,
+  humanPaymentMethodLabel,
+  humanPaymentMethodHint,
+} from '../utils/paymentMethodLabel';
+import { Kicker } from '@/components/ui/Kicker';
+import { WebBackButton } from '../components/WebBackButton';
+import { CardIcon, CryptoIcon, StarIcon, ChevronRightIcon, WalletIcon } from '@/components/icons';
+
+/** Type-level glyph (never a brand mark). */
+function MethodGlyph({ kind, className }: { kind: string | null; className?: string }) {
+  if (kind === 'stars') return <StarIcon className={className} />;
+  if (kind === 'crypto') return <CryptoIcon className={className} />;
+  if (kind === 'sbp') return <WalletIcon className={className} />;
+  return <CardIcon className={className} />;
+}
 
 export default function TopUpMethodSelect() {
   const { t } = useTranslation();
@@ -31,68 +43,62 @@ export default function TopUpMethodSelect() {
   };
 
   return (
-    <motion.div
-      className="space-y-6"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-    >
-      <motion.div variants={staggerItem}>
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-          {t('balance.selectPaymentMethod')}
+    <div className="space-y-6">
+      <div>
+        {!searchParams.get('returnTo') && <WebBackButton to="/balance" />}
+        <Kicker className="mb-1 mt-2">{t('balance.details.topupTitle')}</Kicker>
+        <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50">
+          {t('balance.details.methodTitle')}
         </h1>
-      </motion.div>
+      </div>
 
-      <motion.div variants={staggerItem}>
-        <Card>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-            </div>
-          ) : !paymentMethods || paymentMethods.length === 0 ? (
-            <div className="py-6 text-center text-sm text-dark-400">
-              {t('balance.noPaymentMethods')}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {paymentMethods.map((method) => {
-                const methodKey = method.id.toLowerCase().replace(/-/g, '_');
-                const translatedName = t(`balance.paymentMethods.${methodKey}.name`, {
-                  defaultValue: '',
-                });
-                const translatedDesc = t(`balance.paymentMethods.${methodKey}.description`, {
-                  defaultValue: '',
-                });
-
-                return (
-                  <Card
-                    key={method.id}
-                    interactive={method.is_available}
-                    className={!method.is_available ? 'cursor-not-allowed opacity-50' : ''}
-                    onClick={() => method.is_available && handleMethodClick(method.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <PaymentMethodIcon method={methodKey} className="h-8 w-8 flex-shrink-0" />
-                      <div className="font-semibold text-dark-100">
-                        {translatedName || method.name}
-                      </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton h-20 w-full rounded-bento" />
+          ))}
+        </div>
+      ) : !paymentMethods || paymentMethods.length === 0 ? (
+        <div className="rounded-bento border border-champagne-300 bg-champagne-50 p-8 text-center text-sm text-champagne-500 dark:border-dark-700/40 dark:bg-dark-900/60">
+          {t('balance.noPaymentMethods')}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {paymentMethods.map((method) => {
+            const kind = classifyPaymentMethod(method);
+            const label = humanPaymentMethodLabel(method);
+            const hint = humanPaymentMethodHint(method);
+            return (
+              <button
+                key={method.id}
+                type="button"
+                disabled={!method.is_available}
+                onClick={() => method.is_available && handleMethodClick(method.id)}
+                className="flex w-full items-center gap-4 rounded-bento border border-champagne-300 bg-champagne-50 p-5 text-left transition-colors hover:bg-champagne-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-700/40 dark:bg-dark-900/60 dark:hover:bg-dark-800/40"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-500/12 text-accent-600">
+                  <MethodGlyph kind={kind} className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-semibold text-champagne-900 dark:text-dark-50">
+                    {label}
+                  </div>
+                  {hint && (
+                    <div className="mt-0.5 text-[12px] text-champagne-600 dark:text-dark-400">
+                      {hint}
                     </div>
-                    {(translatedDesc || method.description) && (
-                      <div className="mt-1 text-sm text-dark-500">
-                        {translatedDesc || method.description}
-                      </div>
-                    )}
-                    <div className="mt-3 text-xs text-dark-600">
-                      {formatAmount(method.min_amount_kopeks / 100, 0)} –{' '}
-                      {formatAmount(method.max_amount_kopeks / 100, 0)} {currencySymbol}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </motion.div>
-    </motion.div>
+                  )}
+                  <div className="mt-1 font-mono text-[11px] text-champagne-500 dark:text-dark-400">
+                    {formatAmount(method.min_amount_kopeks / 100, 0)} –{' '}
+                    {formatAmount(method.max_amount_kopeks / 100, 0)} {currencySymbol}
+                  </div>
+                </div>
+                <ChevronRightIcon className="h-5 w-5 shrink-0 text-champagne-400" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

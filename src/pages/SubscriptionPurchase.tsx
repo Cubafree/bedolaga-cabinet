@@ -1,29 +1,36 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { subscriptionApi } from '../api/subscription';
 import { WebBackButton } from '../components/WebBackButton';
-import { getGlassColors } from '../utils/glassTheme';
-import { useTheme } from '../hooks/useTheme';
-import type { Tariff, ClassicPurchaseOptions } from '../types';
-import { useCloseOnSuccessNotification } from '../store/successNotification';
-import { SwitchTariffSheet } from '../components/subscription/sheets/SwitchTariffSheet';
-import { TariffPurchaseForm } from '../components/subscription/purchase/TariffPurchaseForm';
-import { TariffPickerGrid } from '../components/subscription/purchase/TariffPickerGrid';
-import { ClassicPurchaseWizard } from '../components/subscription/purchase/ClassicPurchaseWizard';
-import { ExclamationIcon, SparklesIcon } from '@/components/icons';
+import type { ClassicPurchaseOptions } from '../types';
+import { useCurrency } from '../hooks/useCurrency';
+import { Kicker } from '../components/ui/Kicker';
+import { TariffsPurchasePanel } from '../components/subscription/purchase/TariffsPurchasePanel';
+import { ClassicPurchasePanel } from '../components/subscription/purchase/ClassicPurchasePanel';
+
+// ──────────────────────────────────────────────────────────────────
+// SubscriptionPurchase — the ONE consolidated «Выбор подписки» screen
+// (NOTES_purchase_redesign §1–3). Page shell: keeps the queries +
+// mode detection; delegates the body to two mode panels that each
+// render: balance chip → tariff/period selector → calm summary →
+// sticky balance-aware <PurchasePayBar>.
+//
+// Entry: Главная светофор CTA + «Подписка» tab →
+//   /subscription/buy?subscriptionId=N  (skips the detail hop).
+// The mobile tab bar is hidden on this route (App layout route-gate).
+// ──────────────────────────────────────────────────────────────────
 
 export default function SubscriptionPurchase() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
+  const { formatAmount, currencySymbol } = useCurrency();
+
   const subscriptionId = searchParams.get('subscriptionId')
     ? parseInt(searchParams.get('subscriptionId')!, 10)
     : undefined;
-  const { isDark } = useTheme();
-  const g = getGlassColors(isDark);
+  const isResume = searchParams.get('resume') === '1';
 
-  // Subscription query (shares cache with /subscription page)
   const { data: subscriptionResponse, isLoading } = useQuery({
     queryKey: ['subscription', subscriptionId],
     queryFn: () => subscriptionApi.getSubscription(subscriptionId),
@@ -33,7 +40,6 @@ export default function SubscriptionPurchase() {
   });
   const subscription = subscriptionResponse?.subscription ?? null;
 
-  // Purchase options
   const {
     data: purchaseOptions,
     isLoading: optionsLoading,
@@ -46,13 +52,11 @@ export default function SubscriptionPurchase() {
     refetchOnMount: 'always',
   });
 
-  // Sales mode detection
   const isTariffsMode = purchaseOptions?.sales_mode === 'tariffs';
-  const classicOptions = !isTariffsMode ? (purchaseOptions as ClassicPurchaseOptions) : null;
+  const classicOptions = !isTariffsMode ? (purchaseOptions as ClassicPurchaseOptions | null) : null;
   const tariffs =
     isTariffsMode && purchaseOptions && 'tariffs' in purchaseOptions ? purchaseOptions.tariffs : [];
 
-  // Multi-tariff: check via subscriptions list query
   const { data: multiSubData } = useQuery({
     queryKey: ['subscriptions-list'],
     queryFn: () => subscriptionApi.getSubscriptions(),
@@ -60,63 +64,68 @@ export default function SubscriptionPurchase() {
   });
   const isMultiTariff = multiSubData?.multi_tariff_enabled ?? false;
 
-  // (active promo discount + applyPromoDiscount live in usePromoDiscount;
-  //  consumed directly by the sub-components, not threaded as props)
+  const balanceKopeks = purchaseOptions?.balance_kopeks ?? 0;
+  const loading = isLoading || optionsLoading;
 
-  // (classic-mode state moved into <ClassicPurchaseWizard>)
+  const headerTitle =
+    isMultiTariff && !subscriptionId
+      ? t('subscription.newTariff', 'Новый тариф')
+      : subscription && !subscription.is_trial
+        ? t('subscription.extend', 'Продлить подписку')
+        : t('subscription.getSubscription', 'Оформить подписку');
 
-  // Tariffs mode state
-  const [selectedTariff, setSelectedTariff] = useState<Tariff | null>(null);
-  const [showTariffPurchase, setShowTariffPurchase] = useState(false);
-  // (selectedTariffPeriod / customDays / customTrafficGb / useCustomDays /
-  //  useCustomTraffic moved into <TariffPurchaseForm>; form remounts with
-  //  fresh state via key=tariff.id when the parent picks a new tariff)
+  // returnTo this exact screen (with subscriptionId + resume flag) so the
+  // top-up flow always round-trips back into the saved order.
+  const returnTo =
+    '/subscription/buy' +
+    (subscriptionId ? `?subscriptionId=${subscriptionId}&resume=1` : '?resume=1');
+  const topUpHref = `/subscription/balance/top-up?returnTo=${encodeURIComponent(returnTo)}`;
 
-  // (tariffPurchaseRef moved into <TariffPurchaseForm>; switch-modal ref
-  //  moved into <SwitchTariffSheet>)
-
-  // Tariff switch
-  const [switchTariffId, setSwitchTariffId] = useState<number | null>(null);
-
-  // Auto-close all modals on success notification
-  const handleCloseAllModals = () => {
-    // setShowPurchaseForm moved into <ClassicPurchaseWizard>'s own useCloseOnSuccessNotification
-    setShowTariffPurchase(false);
-    setSwitchTariffId(null);
-
-    setSelectedTariff(null);
-    // (selectedTariffPeriod lives inside <TariffPurchaseForm> now; unmount clears it)
-  };
-  useCloseOnSuccessNotification(handleCloseAllModals);
-
-  // (switch preview query + switchTariffMutation moved into <SwitchTariffSheet>)
-
-  // (tariffPurchaseMutation moved into <TariffPurchaseForm>)
-  // (auto-scroll effects: switch-modal into <SwitchTariffSheet>,
-  //  tariff-purchase into <TariffPurchaseForm>)
-
-  // (classic-mode helpers moved into <ClassicPurchaseWizard>)
-
-  if (isLoading || optionsLoading) {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 pb-40 lg:pb-6">
+      <div className="flex items-center gap-3">
+        <WebBackButton to={subscriptionId ? `/subscriptions/${subscriptionId}` : '/subscriptions'} />
+        <div>
+          <Kicker>{t('subscription.buyKicker', 'Выбор подписки')}</Kicker>
+          <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50">
+            {headerTitle}
+          </h1>
+        </div>
       </div>
-    );
-  }
 
-  if (optionsError || (!purchaseOptions && !optionsLoading)) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">{t('subscription.extend')}</h1>
-        <div
-          className="rounded-3xl p-6 text-center"
-          style={{
-            background: g.cardBg,
-            border: `1px solid ${g.cardBorder}`,
-          }}
-        >
-          <p className="mb-4 text-dark-300">
+      {/* Balance chip — ALWAYS on, top (the headline fix). */}
+      {loading ? (
+        <div className="h-12 animate-pulse rounded-full bg-champagne-200/60 dark:bg-dark-800/60" />
+      ) : (
+        <div className="flex items-center justify-between rounded-full border border-champagne-300 bg-champagne-100 px-4 py-2.5 dark:border-dark-700/40 dark:bg-dark-800/60">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-champagne-600 dark:text-dark-400">
+            {t('subscription.yourBalance', 'Ваш баланс')}{' '}
+            <span className="font-sans font-semibold normal-case tracking-normal text-champagne-900 dark:text-dark-50">
+              {formatAmount(balanceKopeks / 100)} {currencySymbol}
+            </span>
+          </span>
+          <Link to={topUpHref} className="text-[13px] font-medium text-accent-600 hover:underline">
+            {t('subscription.topUp', 'Пополнить')}
+          </Link>
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-3">
+          <div className="h-5 w-16 animate-pulse rounded bg-champagne-200/60 dark:bg-dark-800/60" />
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
+            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
+            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
+          </div>
+        </div>
+      )}
+
+      {/* Error / no options */}
+      {!loading && (optionsError || !purchaseOptions) && (
+        <div className="rounded-3xl border border-champagne-300 bg-champagne-50 p-6 text-center dark:border-dark-700/50 dark:bg-dark-800/60">
+          <p className="mb-4 text-champagne-700 dark:text-dark-300">
             {t('subscription.loadError', 'Не удалось загрузить варианты подписки')}
           </p>
           <button
@@ -126,198 +135,41 @@ export default function SubscriptionPurchase() {
             {t('common.retry')}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <WebBackButton
-          to={subscriptionId ? `/subscriptions/${subscriptionId}` : '/subscriptions'}
-        />
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-          {isMultiTariff && !subscriptionId
-            ? t('subscription.newTariff', 'Новый тариф')
-            : !isMultiTariff && subscription?.is_daily && !subscription?.is_trial
-              ? t('subscription.switchTariff.title')
-              : subscription && !subscription.is_trial
-                ? t('subscription.extend')
-                : t('subscription.getSubscription')}
-        </h1>
-      </div>
-
-      {/* Tariffs Section */}
-      {isTariffsMode && tariffs.length > 0 && (
-        <div
-          className="relative overflow-hidden rounded-3xl"
-          style={{
-            background: g.cardBg,
-            border: `1px solid ${g.cardBorder}`,
-            boxShadow: g.shadow,
-            padding: '24px 28px',
-          }}
-        >
-          {/* Trial upgrade prompt — hidden when expired banner is active */}
-          {subscription?.is_trial &&
-            !(
-              isTariffsMode &&
-              purchaseOptions &&
-              'subscription_is_expired' in purchaseOptions &&
-              purchaseOptions.subscription_is_expired
-            ) && (
-              <div
-                className="mb-6 rounded-[14px] p-4"
-                style={{
-                  background:
-                    'linear-gradient(135deg, rgba(255,184,0,0.08), rgba(var(--color-accent-400),0.06))',
-                  border: '1px solid rgba(255,184,0,0.15)',
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px]"
-                    style={{
-                      background: 'rgba(255,184,0,0.12)',
-                      color: 'rgb(var(--color-urgent-400))',
-                    }}
-                  >
-                    <SparklesIcon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div
-                      className="text-sm font-semibold"
-                      style={{ color: 'rgb(var(--color-urgent-400))' }}
-                    >
-                      {t('subscription.trialUpgrade.title')}
-                    </div>
-                    <div className="mt-1 text-[12px] text-dark-50/40">
-                      {t('subscription.trialUpgrade.description')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          {/* Expired subscription notice */}
-          {isTariffsMode &&
-            purchaseOptions &&
-            'subscription_is_expired' in purchaseOptions &&
-            purchaseOptions.subscription_is_expired && (
-              <div
-                className="mb-6 rounded-[14px] p-4"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(255,59,92,0.08), rgba(255,184,0,0.06))',
-                  border: '1px solid rgba(255,59,92,0.15)',
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px]"
-                    style={{
-                      background: 'rgba(255,59,92,0.12)',
-                      color: 'rgb(var(--color-critical-500))',
-                    }}
-                  >
-                    <ExclamationIcon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div
-                      className="text-sm font-semibold"
-                      style={{ color: 'rgb(var(--color-critical-500))' }}
-                    >
-                      {t('subscription.expiredBanner.title')}
-                    </div>
-                    <div className="mt-1 text-[12px] text-dark-50/40">
-                      {t('subscription.expiredBanner.selectTariff')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          {/* Legacy subscription notice */}
-          {subscription && !subscription.is_trial && !subscription.tariff_id && (
-            <div className="mb-6 rounded-xl border border-accent-500/30 bg-accent-500/10 p-4">
-              <div className="mb-2 font-medium text-accent-400">
-                {t('subscription.legacy.selectTariffTitle')}
-              </div>
-              <div className="text-sm text-dark-300">
-                {t('subscription.legacy.selectTariffDescription')}
-              </div>
-              <div className="mt-2 text-xs text-dark-500">
-                {t('subscription.legacy.currentSubContinues')}
-              </div>
-            </div>
-          )}
-
-          {/* Switch Tariff Preview Modal */}
-          <SwitchTariffSheet
-            open={switchTariffId !== null}
-            tariffId={switchTariffId}
-            subscriptionId={subscriptionId}
-            tariffs={tariffs}
-            onClose={() => setSwitchTariffId(null)}
-            onExpiredFallback={(tariff) => {
-              setSelectedTariff(tariff);
-              setShowTariffPurchase(true);
-            }}
-          />
-
-          {!showTariffPurchase ? (
-            <TariffPickerGrid
-              tariffs={tariffs}
-              subscription={subscription}
-              purchaseOptions={purchaseOptions}
-              isTariffsMode={isTariffsMode}
-              isMultiTariff={isMultiTariff}
-              onSelectTariff={(tariff) => {
-                setSelectedTariff(tariff);
-                setShowTariffPurchase(true);
-              }}
-              onSwitchTariff={(tariffId) => setSwitchTariffId(tariffId)}
-            />
-          ) : (
-            selectedTariff && (
-              /* Tariff Purchase Form (extracted into its own component) */
-              <TariffPurchaseForm
-                key={selectedTariff.id}
-                tariff={selectedTariff}
-                subscriptionId={subscriptionId}
-                balanceKopeks={purchaseOptions?.balance_kopeks}
-                onBack={() => {
-                  setShowTariffPurchase(false);
-                  setSelectedTariff(null);
-                }}
-              />
-            )
-          )}
-        </div>
       )}
 
-      {/* Purchase/Extend Section - Classic Mode */}
-      {classicOptions && classicOptions.periods.length > 0 && (
-        <ClassicPurchaseWizard
+      {/* Tariffs mode */}
+      {!loading && isTariffsMode && tariffs.length > 0 && purchaseOptions && (
+        <TariffsPurchasePanel
+          tariffs={tariffs}
+          subscription={subscription}
+          subscriptionId={subscriptionId}
+          balanceKopeks={balanceKopeks}
+          isMultiTariff={isMultiTariff}
+          isResume={isResume}
+          purchaseOptions={purchaseOptions}
+          topUpHref={topUpHref}
+        />
+      )}
+
+      {/* Classic mode */}
+      {!loading && classicOptions && classicOptions.periods.length > 0 && (
+        <ClassicPurchasePanel
           classicOptions={classicOptions}
           subscription={subscription}
           subscriptionId={subscriptionId}
+          balanceKopeks={balanceKopeks}
+          isResume={isResume}
+          topUpHref={topUpHref}
         />
       )}
 
       {/* No options available fallback */}
-      {purchaseOptions &&
-        !optionsLoading &&
+      {!loading &&
+        purchaseOptions &&
         !(isTariffsMode && tariffs.length > 0) &&
         !(classicOptions && classicOptions.periods.length > 0) && (
-          <div
-            className="rounded-3xl p-6 text-center"
-            style={{
-              background: g.cardBg,
-              border: `1px solid ${g.cardBorder}`,
-            }}
-          >
-            <p className="mb-4 text-dark-300">
+          <div className="rounded-3xl border border-champagne-300 bg-champagne-50 p-6 text-center dark:border-dark-700/50 dark:bg-dark-800/60">
+            <p className="mb-4 text-champagne-700 dark:text-dark-300">
               {t('subscription.noOptionsAvailable', 'Нет доступных вариантов подписки')}
             </p>
             <button

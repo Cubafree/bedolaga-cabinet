@@ -250,10 +250,6 @@ export default function Referral() {
             {formatPositive(info?.total_earnings_rubles || 0)}
           </div>
         </div>
-        <div className="bento-card-hover">
-          <div className="text-sm text-dark-400">{t('referral.stats.commissionRate')}</div>
-          <div className="stat-value mt-1 text-accent-400">{info?.commission_percent || 0}%</div>
-        </div>
       </div>
 
       {/* Referral Links */}
@@ -323,7 +319,7 @@ export default function Referral() {
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm text-dark-500">
+        <p className="mt-3 rounded-xl border border-accent-500/30 bg-accent-500/10 px-4 py-3 text-sm font-medium text-accent-300">
           {t('referral.shareHint', { percent: info?.commission_percent || 0 })}
         </p>
       </div>

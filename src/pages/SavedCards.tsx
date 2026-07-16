@@ -1,31 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
-import { motion } from 'framer-motion';
 
 import { balanceApi } from '../api/balance';
 import { useToast } from '../components/Toast';
 import { useDestructiveConfirm } from '../platform/hooks/useNativeDialog';
 
-import { Card } from '@/components/data-display/Card';
-import { Button } from '@/components/primitives/Button';
-import { BackIcon } from '@/components/icons';
-import { staggerContainer, staggerItem } from '@/components/motion/transitions';
-
-function formatCardDate(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString();
-  } catch {
-    return dateStr;
-  }
-}
+import { Kicker } from '@/components/ui/Kicker';
+import { WebBackButton } from '../components/WebBackButton';
+import { CreditCardIcon, TrashIcon } from '@/components/icons';
 
 export default function SavedCards() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const confirmDelete = useDestructiveConfirm();
@@ -45,8 +31,9 @@ export default function SavedCards() {
   const handleDeleteCard = async (cardId: number) => {
     if (deletingCardId !== null) return;
     const confirmed = await confirmDelete(
-      t('balance.savedCards.confirmUnlink'),
-      t('balance.savedCards.unlink'),
+      t('balance.details.cardRemoveConfirmText'),
+      t('balance.details.cardRemove'),
+      t('balance.details.cardRemoveConfirmTitle'),
     );
     if (!confirmed) return;
     setDeletingCardId(cardId);
@@ -73,112 +60,91 @@ export default function SavedCards() {
   };
 
   return (
-    <motion.div
-      className="space-y-6"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <motion.div variants={staggerItem} className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/balance')}
-          className="flex h-10 w-10 items-center justify-center rounded-linear border border-dark-700/30 bg-dark-800/50 text-dark-300 transition-colors hover:bg-dark-700/50 hover:text-dark-100"
-        >
-          <BackIcon className="h-5 w-5" />
-        </button>
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-          {t('balance.savedCards.pageTitle')}
-        </h1>
-      </motion.div>
+      <div className="flex items-center gap-3">
+        <WebBackButton to="/balance" />
+        <div>
+          <Kicker className="mb-1">{t('balance.title')}</Kicker>
+          <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50">
+            {t('balance.details.cardsTitle')}
+          </h1>
+        </div>
+      </div>
 
-      {/* Loading state */}
+      <p className="text-[13px] text-champagne-600 dark:text-dark-400">
+        {t('balance.details.cardsSubtitle')}
+      </p>
+
+      {/* Loading */}
       {isLoading && (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="space-y-3">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-linear border border-dark-700/30 bg-dark-800/30 p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-6 w-6 animate-pulse rounded bg-dark-700" />
-                    <div className="space-y-2">
-                      <div className="h-4 w-32 animate-pulse rounded bg-dark-700" />
-                      <div className="h-3 w-24 animate-pulse rounded bg-dark-700" />
-                    </div>
-                  </div>
-                  <div className="h-8 w-20 animate-pulse rounded bg-dark-700" />
-                </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
+        <div className="space-y-3">
+          {[0, 1].map((i) => (
+            <div key={i} className="skeleton h-20 w-full rounded-bento" />
+          ))}
+        </div>
       )}
 
-      {/* Error state */}
+      {/* Error */}
       {isError && (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="py-12 text-center">
-              <div className="text-error-400">{t('balance.savedCards.loadError')}</div>
-            </div>
-          </Card>
-        </motion.div>
+        <div className="rounded-bento border border-error-500/30 bg-error-500/10 p-6 text-center text-sm text-error-500">
+          {t('balance.savedCards.loadError')}
+        </div>
       )}
 
-      {/* Cards List */}
-      {!isLoading && !isError && savedCards && savedCards.length > 0 ? (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="space-y-3">
-              {savedCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-center justify-between rounded-linear border border-dark-700/30 bg-dark-800/30 p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">💳</span>
-                    <div>
-                      <div className="font-medium text-dark-100">
-                        {card.title ||
-                          `${card.card_type || t('balance.savedCards.card')} ${card.card_last4 ? `*${card.card_last4}` : ''}`}
-                      </div>
-                      <div className="text-xs text-dark-500">
-                        {t('balance.savedCards.linkedAt', {
-                          date: formatCardDate(card.created_at),
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleDeleteCard(card.id)}
-                    loading={deletingCardId === card.id}
-                    className="text-error-400 hover:text-error-300"
-                  >
-                    {t('balance.savedCards.unlink')}
-                  </Button>
+      {/* Cards */}
+      {!isLoading && !isError && savedCards && savedCards.length > 0 && (
+        <div className="space-y-3">
+          {savedCards.map((card) => (
+            <div
+              key={card.id}
+              className="flex items-center justify-between gap-3 rounded-bento border border-champagne-300 bg-champagne-50 p-5 dark:border-dark-700/40 dark:bg-dark-900/60"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-500/12 text-accent-600">
+                  <CreditCardIcon className="h-5 w-5" />
+                </span>
+                <div className="font-medium text-champagne-900 dark:text-dark-50">
+                  {card.card_last4
+                    ? t('balance.details.cardItem', { last4: card.card_last4 })
+                    : card.title || t('balance.savedCards.card')}
                 </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      ) : !isLoading && !isError && savedCards ? (
-        /* Empty state - only show when data loaded and empty */
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="py-12 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-linear-lg bg-dark-800">
-                <span className="text-3xl">💳</span>
               </div>
-              <div className="text-dark-400">{t('balance.savedCards.empty')}</div>
+              <button
+                onClick={() => handleDeleteCard(card.id)}
+                disabled={deletingCardId === card.id}
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-error-500 transition-colors hover:bg-error-500/10 disabled:opacity-50"
+              >
+                {deletingCardId === card.id ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-error-500/40 border-t-error-500" />
+                ) : (
+                  <TrashIcon className="h-4 w-4" />
+                )}
+                {t('balance.details.cardRemove')}
+              </button>
             </div>
-          </Card>
-        </motion.div>
-      ) : null}
-    </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty */}
+      {!isLoading && !isError && savedCards && savedCards.length === 0 && (
+        <div className="rounded-bento border border-champagne-300 bg-champagne-50 p-10 text-center dark:border-dark-700/40 dark:bg-dark-900/60">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-champagne-100 dark:bg-dark-800">
+            <CreditCardIcon className="h-7 w-7 text-champagne-400" />
+          </div>
+          <div className="text-champagne-600 dark:text-dark-400">
+            {t('balance.details.cardsEmpty')}
+          </div>
+        </div>
+      )}
+
+      {/* Security note */}
+      {!isLoading && !isError && savedCards && savedCards.length > 0 && (
+        <p className="text-center text-[12px] text-champagne-500 dark:text-dark-400">
+          {t('balance.details.cardsSecurity')}
+        </p>
+      )}
+    </div>
   );
 }

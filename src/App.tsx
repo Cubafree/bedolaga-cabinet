@@ -43,19 +43,25 @@ import DeepLinkRedirect from './pages/DeepLinkRedirect';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import OAuthCallback from './pages/OAuthCallback';
+import ConnectRoute from './pages/ConnectRoute';
 
 // Dashboard - load eagerly (default route, LCP-critical)
 import Dashboard from './pages/Dashboard';
 
 // User pages - lazy load
 const Subscriptions = lazyWithRetry(() => import('./pages/Subscriptions'));
+// Legacy detail screen, HIDE-not-delete: kept on disk, superseded by the
+// restyled `SubscriptionDetail` (Epic 1 #3). Retained in `_retainedHiddenPages`.
 const Subscription = lazyWithRetry(() => import('./pages/Subscription'));
+const SubscriptionDetail = lazyWithRetry(() => import('./pages/SubscriptionDetail'));
 const SubscriptionPurchase = lazyWithRetry(() => import('./pages/SubscriptionPurchase'));
 const Balance = lazyWithRetry(() => import('./pages/Balance'));
 const SavedCards = lazyWithRetry(() => import('./pages/SavedCards'));
 const Referral = lazyWithRetry(() => import('./pages/Referral'));
 const Support = lazyWithRetry(() => import('./pages/Support'));
+const HelpPage = lazyWithRetry(() => import('./pages/HelpPage'));
 const Profile = lazyWithRetry(() => import('./pages/Profile'));
+const AccountHub = lazyWithRetry(() => import('./pages/AccountHub'));
 const Contests = lazyWithRetry(() => import('./pages/Contests'));
 const Polls = lazyWithRetry(() => import('./pages/Polls'));
 const Info = lazyWithRetry(() => import('./pages/Info'));
@@ -246,6 +252,38 @@ function LegacySubscriptionRedirect() {
   return <Navigate to={`/subscriptions/${subscriptionId}`} replace />;
 }
 
+// RenewSubscription is retired as a separate page (NOTES_purchase_redesign §6):
+// renew/extend is now ONE consolidated screen at /subscription/buy. Both old
+// renew routes redirect there, carrying the subscription id so the buy screen
+// resolves the exact row (extension pricing, not a fresh purchase).
+function RenewToBuyRedirect() {
+  const { subscriptionId } = useParams<{ subscriptionId: string }>();
+  return <Navigate to={`/subscription/buy?subscriptionId=${subscriptionId}`} replace />;
+}
+
+// HIDE-not-delete (feature matrix): these page components are intentionally
+// kept imported but route-less so BEDOLAGA upstream merges stay cheap. Their
+// routes were removed/redirected in the IA re-spine (Wheel/Contests/Polls/News),
+// or superseded by the new /connect flow (Connection/ConnectionQR — the rich
+// guide is reused via InstallationGuide inside ConnectPage). This reference keeps
+// `noUnusedLocals` satisfied without registering the screens in the nav/router.
+const _retainedHiddenPages = {
+  Connection,
+  ConnectionQR,
+  Contests,
+  Polls,
+  Wheel,
+  NewsArticlePage,
+  // Retired as a route (NOTES_purchase_redesign §6) — kept imported so the
+  // page code stays on disk for cheap upstream merges. Reachable only via the
+  // /subscription/buy redirect now.
+  RenewSubscription,
+  // Legacy subscription-detail screen (Epic 1 #3) — restyled into
+  // SubscriptionDetail; kept on disk, route-less.
+  Subscription,
+};
+void _retainedHiddenPages;
+
 function App() {
   useAnalyticsCounters();
   // Pulls site-verification tokens (Antilopay apay-tag etc.) from the bot
@@ -261,7 +299,9 @@ function App() {
         <Route path="/auth/telegram/callback" element={<TelegramCallback />} />
         <Route path="/auth/telegram" element={<TelegramRedirect />} />
         <Route path="/tg" element={<TelegramRedirect />} />
-        <Route path="/connect" element={<DeepLinkRedirect />} />
+        {/* `/connect` is the Подключить tab AND a public bot deep-link landing.
+            ConnectRoute branches on a `?url`/`?deeplink` param (see ConnectRoute). */}
+        <Route path="/connect" element={<ConnectRoute />} />
         <Route path="/add" element={<DeepLinkRedirect />} />
         <Route path="/auth/oauth/callback" element={<OAuthCallback />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
@@ -333,33 +373,28 @@ function App() {
           element={
             <ProtectedRoute>
               <LazyPage>
-                <Subscription />
+                <SubscriptionDetail />
               </LazyPage>
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/subscriptions/:subscriptionId/renew"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <RenewSubscription />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
-        {/* Legacy redirects for backward compatibility */}
-        <Route path="/subscription/:subscriptionId" element={<LegacySubscriptionRedirect />} />
+        {/* Retired: renew is now the consolidated /subscription/buy screen. */}
+        <Route path="/subscriptions/:subscriptionId/renew" element={<RenewToBuyRedirect />} />
+        {/* New IA: Подписка tab at /subscription (renders the same Subscriptions
+            screen; restyle of the subscription interior is a later slice). More
+            specific child routes must precede the /:subscriptionId param route. */}
         <Route
           path="/subscription"
           element={
             <ProtectedRoute>
-              <Navigate to="/subscriptions" replace />
+              <LazyPage>
+                <Subscriptions />
+              </LazyPage>
             </ProtectedRoute>
           }
         />
         <Route
-          path="/subscription/purchase"
+          path="/subscription/buy"
           element={
             <ProtectedRoute>
               <LazyPage>
@@ -368,6 +403,53 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Balance folded under Подписка (IA §1.3) — alias to the existing flows. */}
+        <Route
+          path="/subscription/balance"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <Balance />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription/balance/top-up"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <TopUpMethodSelect />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription/balance/top-up/:methodId"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <TopUpAmount />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription/balance/cards"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <SavedCards />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        {/* Retired: renew is now the consolidated /subscription/buy screen. */}
+        <Route path="/subscription/:subscriptionId/renew" element={<RenewToBuyRedirect />} />
+        {/* Legacy redirect: old /subscription/purchase → new /subscription/buy. */}
+        <Route path="/subscription/purchase" element={<Navigate to="/subscription/buy" replace />} />
+        {/* Detail: keep redirecting to the existing /subscriptions/:id screen. */}
+        <Route path="/subscription/:subscriptionId" element={<LegacySubscriptionRedirect />} />
         <Route
           path="/balance"
           element={
@@ -428,6 +510,51 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* New IA tabs (aliases over existing screens — interiors restyled later). */}
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <HelpPage />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <AccountHub />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account/linked"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <ConnectedAccounts />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        {/* Referral (base) lives under Аккаунт now (IA §1.3); /referral kept as-is. */}
+        <Route
+          path="/account/invite"
+          element={
+            <ProtectedRoute>
+              <LazyPage>
+                <Referral />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        {/* Old connection routes → new /connect tab. */}
+        <Route path="/connection" element={<Navigate to="/connect" replace />} />
+        <Route path="/connection/qr" element={<Navigate to="/connect" replace />} />
         <Route
           path="/referral/partner/apply"
           element={
@@ -488,42 +615,18 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/contests"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <Contests />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/polls"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <Polls />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
+        {/* HIDE (feature matrix): Wheel / Contests / Polls / News are gated out of
+            the IA. Code is kept (imports retained for upstream merges) but the
+            routes redirect home so the features are unreachable. */}
+        <Route path="/contests" element={<Navigate to="/" replace />} />
+        <Route path="/polls" element={<Navigate to="/" replace />} />
+        <Route path="/wheel" element={<Navigate to="/" replace />} />
         <Route
           path="/info"
           element={
             <ProtectedRoute>
               <LazyPage>
                 <Info />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/wheel"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <Wheel />
               </LazyPage>
             </ProtectedRoute>
           }
@@ -548,36 +651,11 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/connection/qr"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <ConnectionQR />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/connection"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <Connection />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/news/:slug"
-          element={
-            <ProtectedRoute>
-              <LazyPage>
-                <NewsArticlePage />
-              </LazyPage>
-            </ProtectedRoute>
-          }
-        />
+        {/* /connection* now redirect to /connect (defined earlier). The old
+            Connection / ConnectionQR page components stay imported but route-less,
+            reused inside the new flow's «Другое устройство» disclosure. */}
+        {/* HIDE: News is gated out of the IA. */}
+        <Route path="/news/:slug" element={<Navigate to="/" replace />} />
         <Route
           path="/info/:slug"
           element={

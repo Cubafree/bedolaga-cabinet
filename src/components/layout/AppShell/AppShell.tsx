@@ -24,14 +24,12 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import TicketNotificationBell from '@/components/TicketNotificationBell';
 import {
   SubscriptionIcon,
-  GiftIcon,
   HomeIcon,
-  CreditCardIcon,
+  PowerIcon,
+  RocketIcon,
   ChatIcon,
   UserIcon,
-  UsersIcon,
   ShieldIcon,
-  InfoIcon,
   LogoutIcon,
   SunIcon,
   MoonIcon,
@@ -57,7 +55,7 @@ export function AppShell({ children }: AppShellProps) {
   const { toggleTheme, isDark } = useTheme();
 
   // Extracted hooks
-  const { appName, logoLetter, hasCustomLogo, logoUrl } = useBranding();
+  const { appName, hasCustomLogo, logoUrl } = useBranding();
   const { referralEnabled, wheelEnabled, hasContests, hasPolls, giftEnabled } = useFeatureFlags();
   useScrollRestoration();
 
@@ -110,22 +108,25 @@ export function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
-  // Desktop navigation — labels always visible (no hover-reveal gimmick)
+  // Desktop navigation — fixed 5-tab spine (mirrors the mobile bottom bar).
+  // Wheel/Referral/Gift/Info no longer eat nav slots (IA §1.3 / feature matrix HIDE).
   const desktopNav = [
-    { path: '/', label: t('nav.dashboard'), icon: HomeIcon },
-    { path: '/subscriptions', label: t('nav.subscription'), icon: SubscriptionIcon },
-    { path: '/balance', label: t('nav.balance'), icon: CreditCardIcon },
-    ...(referralEnabled ? [{ path: '/referral', label: t('nav.referral'), icon: UsersIcon }] : []),
-    ...(giftEnabled ? [{ path: '/gift', label: t('nav.gift'), icon: GiftIcon }] : []),
-    { path: '/support', label: t('nav.support'), icon: ChatIcon },
-    { path: '/info', label: t('nav.info'), icon: InfoIcon },
-    { path: '/profile', label: t('nav.profile'), icon: UserIcon },
+    { path: '/', label: t('nav.home'), icon: HomeIcon },
+    { path: '/connect', label: t('nav.connect'), icon: PowerIcon },
+    { path: '/subscription', label: t('nav.subscription'), icon: SubscriptionIcon },
+    { path: '/help', label: t('nav.help'), icon: ChatIcon },
+    { path: '/account', label: t('nav.account'), icon: UserIcon },
   ];
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
+
+  // Admin entry hidden from cabinet UI — admins reach /admin by direct URL.
+  const ADMIN_NAV_VISIBLE = false;
+  // Animated background disabled (distracting); component kept for easy re-enable.
+  const BACKGROUND_ENABLED = false;
 
   const handleNavClick = () => {
     haptic.impact('light');
@@ -151,10 +152,10 @@ export function AppShell({ children }: AppShellProps) {
           active
             ? admin
               ? 'text-warning-300'
-              : 'text-dark-50'
+              : 'text-champagne-900 dark:text-dark-50'
             : admin
               ? 'text-warning-500/70 hover:bg-warning-500/10 hover:text-warning-300'
-              : 'text-dark-400 hover:bg-dark-800/60 hover:text-dark-100',
+              : 'text-champagne-600 hover:bg-champagne-100 hover:text-champagne-900 dark:text-dark-400 dark:hover:bg-dark-800/60 dark:hover:text-dark-100',
         )}
       >
         {active && (
@@ -165,7 +166,7 @@ export function AppShell({ children }: AppShellProps) {
               'absolute inset-0 rounded-full shadow-sm',
               admin
                 ? 'bg-warning-500/15 ring-1 ring-warning-500/20'
-                : 'bg-dark-700/80 ring-1 ring-dark-600/40',
+                : 'bg-champagne-50 ring-1 ring-champagne-300 dark:bg-dark-700/80 dark:ring-dark-600/40',
             )}
             transition={{ type: 'spring', stiffness: 500, damping: 35 }}
           />
@@ -181,7 +182,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-viewport">
       {/* Animated background renders via portal on document.body at z-index: -1 */}
-      <BackgroundRenderer />
+      {BACKGROUND_ENABLED && <BackgroundRenderer />}
 
       {/* Global components */}
       <WebSocketNotifications />
@@ -190,7 +191,7 @@ export function AppShell({ children }: AppShellProps) {
       <PromptDialogHost />
 
       {/* Desktop Header */}
-      <header className="fixed left-0 right-0 top-0 z-50 hidden border-b border-dark-800/50 bg-dark-950/95 lg:block">
+      <header className="fixed left-0 right-0 top-0 z-50 hidden border-b border-champagne-300 bg-champagne-50 dark:border-dark-800/50 dark:bg-dark-950/95 lg:block">
         {/* 3-зонный grid: лого | капсула | действия. Колонки 1fr_auto_1fr держат
             капсулу строго по центру вьюпорта НЕЗАВИСИМО от ширины лого/действий,
             а действия — у правого края. Поэтому ничего не «скачет» при переходах
@@ -202,16 +203,10 @@ export function AppShell({ children }: AppShellProps) {
             className="flex shrink-0 items-center gap-2.5 justify-self-start"
             onClick={handleNavClick}
           >
-            <div className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-dark-800">
-              <span
-                className={cn(
-                  'absolute text-sm font-bold text-accent-400 transition-opacity duration-200',
-                  hasCustomLogo && isLogoPreloaded() ? 'opacity-0' : 'opacity-100',
-                )}
-              >
-                {logoLetter}
-              </span>
-              {hasCustomLogo && logoUrl && (
+            {/* Brand mark — RocketIcon in an accent square (hi-fi §1.3). The
+                custom-logo override path is preserved: a configured logo still wins. */}
+            <div className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent-500 text-white">
+              {hasCustomLogo && logoUrl ? (
                 <img
                   src={logoUrl}
                   alt={appName || 'Logo'}
@@ -220,19 +215,23 @@ export function AppShell({ children }: AppShellProps) {
                     isLogoPreloaded() ? 'opacity-100' : 'opacity-0',
                   )}
                 />
+              ) : (
+                <RocketIcon className="h-5 w-5" />
               )}
             </div>
-            <span className="text-base font-semibold text-dark-100">{appName}</span>
+            <span className="text-base font-semibold text-champagne-900 dark:text-dark-100">
+              {appName}
+            </span>
           </Link>
 
           {/* Navigation — единая «капсула» (segmented control): все пункты видны
               всегда, без скролла/сжатия/сворачивания. Центрируется средней
               колонкой grid (justify-self-center), а не auto-margin'ами. */}
-          <nav className="flex items-center gap-0.5 justify-self-center rounded-full border border-dark-800/70 bg-dark-900/50 p-1 shadow-sm backdrop-blur-sm">
+          <nav className="flex items-center gap-0.5 justify-self-center rounded-full border border-champagne-300 bg-champagne-100/50 p-1 shadow-sm backdrop-blur-sm dark:border-dark-800/70 dark:bg-dark-900/50">
             {desktopNav.map((item) => renderNavLink(item.path, item.label, item.icon))}
-            {isAdmin && (
+            {ADMIN_NAV_VISIBLE && isAdmin && (
               <>
-                <div className="mx-1 h-5 w-px shrink-0 bg-dark-700/60" />
+                <div className="mx-1 h-5 w-px shrink-0 bg-champagne-300 dark:bg-dark-700/60" />
                 {renderNavLink('/admin', t('admin.nav.title'), ShieldIcon, true)}
               </>
             )}
@@ -296,14 +295,19 @@ export function AppShell({ children }: AppShellProps) {
       <div className="lg:hidden" style={{ height: headerHeight }} />
 
       {/* Main content */}
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-28 lg:px-6 lg:pb-8">{children}</main>
+      {/* Bottom padding must clear the fixed MobileBottomNav (A1): the bar floats
+          16px above the safe area (bottom: 16px + safe-area) and is ~74px tall, so
+          the flow content it overlays needs 16 + ~74 + a breathing gap + safe-area.
+          pb-28 (112px) was a flat value that ignored env(safe-area-inset-bottom),
+          so on notched phones (~34px) the last row clipped. Use an arbitrary value
+          that adds the safe-area inset on top of the nav footprint; lg has no bottom
+          nav, so lg:pb-8 still wins there. */}
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-[calc(120px+env(safe-area-inset-bottom,0px))] lg:px-6 lg:pb-8">
+        {children}
+      </main>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav
-        isKeyboardOpen={isKeyboardOpen}
-        referralEnabled={referralEnabled}
-        wheelEnabled={wheelEnabled}
-      />
+      {/* Mobile Bottom Navigation — fixed 5-tab spine */}
+      <MobileBottomNav isKeyboardOpen={isKeyboardOpen} />
     </div>
   );
 }

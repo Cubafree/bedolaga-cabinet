@@ -13,7 +13,8 @@ export default function LanguageSwitcher() {
     const fetchLanguages = async () => {
       try {
         const data = await infoApi.getLanguages();
-        setAvailableLanguages(data.languages);
+        // Ukrainian intentionally hidden from the cabinet language picker.
+        setAvailableLanguages(data.languages.filter((l) => l.code !== 'uk' && l.code !== 'ua'));
       } catch {
         // Silently fall back to empty list — component handles it gracefully
       }

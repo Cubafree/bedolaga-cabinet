@@ -46,10 +46,14 @@ export const DEFAULT_THEME_COLORS: ThemeColors = {
   darkText: '#f1f5f9',
   darkTextSecondary: '#94a3b8',
 
-  lightBackground: '#F7E7CE',
-  lightSurface: '#FEF9F0',
-  lightText: '#1F1A12',
-  lightTextSecondary: '#7D6B48',
+  // Landing cream + navy ink (see DESIGN_SYSTEM.md). applyThemeColors() derives the
+  // whole runtime champagne ramp from these; the static :root fallback in
+  // globals.css mirrors them. lightText = navy #0E1B2C so light-theme text reads
+  // navy on cream rather than brown.
+  lightBackground: '#F6F1E7',
+  lightSurface: '#FFFCF5',
+  lightText: '#0E1B2C',
+  lightTextSecondary: '#6A7689',
 
   success: '#22c55e',
   warning: '#f59e0b',

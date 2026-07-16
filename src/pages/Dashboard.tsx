@@ -1,45 +1,43 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { AxiosError } from 'axios';
 import { useAuthStore } from '../store/auth';
-import { displayName } from '../utils/displayName';
 import { useBlockingStore } from '../store/blocking';
 import { subscriptionApi } from '../api/subscription';
-import { referralApi } from '../api/referral';
 import { balanceApi } from '../api/balance';
-import { wheelApi } from '../api/wheel';
 import Onboarding, { useOnboarding } from '../components/Onboarding';
-import PromoOffersSection from '../components/PromoOffersSection';
-import NewsSection from '../components/news/NewsSection';
-import SubscriptionCardActive from '../components/dashboard/SubscriptionCardActive';
-import SubscriptionCardExpired from '../components/dashboard/SubscriptionCardExpired';
-import TrialOfferCard from '../components/dashboard/TrialOfferCard';
-import StatsGrid from '../components/dashboard/StatsGrid';
-import { giftApi } from '../api/gift';
-import { promoApi } from '../api/promo';
-import PendingGiftCard from '../components/dashboard/PendingGiftCard';
+import OnboardingWizard, { useOnboardingWizard } from '../components/OnboardingWizard';
+import StatusCard, { type StatusCardState } from '../components/dashboard/StatusCard';
 import SubscriptionListCard from '../components/subscription/SubscriptionListCard';
+import { getInsufficientBalanceError } from '../utils/subscriptionHelpers';
+import { Kicker } from '@/components/ui/Kicker';
+import { PillButton } from '@/components/ui/PillButton';
+import { ArrowRightIcon, GiftIcon } from '@/components/icons';
 import { API } from '../config/constants';
-import { ChevronRightIcon, StarIcon } from '@/components/icons';
+
+// Yellow светофор threshold — show "expiring" at or below this many days (hi-fi §2.2).
+const EXPIRING_THRESHOLD_DAYS = 5;
 
 export default function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const queryClient = useQueryClient();
   const { isCompleted: isOnboardingCompleted, complete: completeOnboarding } = useOnboarding();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const { isSeen: wizardSeen, markSeen: markWizardSeen } = useOnboardingWizard();
   const blockingType = useBlockingStore((state) => state.blockingType);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
+  const [isRenewing, setIsRenewing] = useState(false);
 
   // Refresh user data on mount
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
 
-  // Fetch balance from API
   const { data: balanceData } = useQuery({
     queryKey: ['balance'],
     queryFn: balanceApi.getBalance,
@@ -79,32 +77,6 @@ export default function Dashboard() {
     staleTime: API.BALANCE_STALE_TIME_MS,
   });
 
-  const { data: referralInfo, isLoading: refLoading } = useQuery({
-    queryKey: ['referral-info'],
-    queryFn: referralApi.getReferralInfo,
-  });
-
-  const { data: wheelConfig } = useQuery({
-    queryKey: ['wheel-config'],
-    queryFn: wheelApi.getConfig,
-    staleTime: 60000,
-    retry: false,
-  });
-
-  const { data: pendingGifts } = useQuery({
-    queryKey: ['pending-gifts'],
-    queryFn: giftApi.getPendingGifts,
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const { data: promoGroupData } = useQuery({
-    queryKey: ['promo-group-discounts'],
-    queryFn: promoApi.getGroupDiscounts,
-    staleTime: 60_000,
-    retry: false,
-  });
-
   const activateTrialMutation = useMutation({
     mutationFn: () => subscriptionApi.activateTrial(),
     onSuccess: () => {
@@ -115,311 +87,202 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['balance'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-options'] });
       refreshUser();
+      // After the trial flips us green, nudge the user toward connecting.
+      navigate('/connect');
     },
     onError: (error: { response?: { data?: { detail?: string } } }) => {
       setTrialError(error.response?.data?.detail || t('common.error'));
     },
   });
 
-  // Traffic refresh state and mutation
-  const [trafficRefreshCooldown, setTrafficRefreshCooldown] = useState(0);
-  const [trafficData, setTrafficData] = useState<{
-    traffic_used_gb: number;
-    traffic_used_percent: number;
-    is_unlimited: boolean;
-  } | null>(null);
-
-  const refreshTrafficMutation = useMutation({
-    mutationFn: () => subscriptionApi.refreshTraffic(subscription?.id),
-    onSuccess: (data) => {
-      setTrafficData({
-        traffic_used_gb: data.traffic_used_gb,
-        traffic_used_percent: data.traffic_used_percent,
-        is_unlimited: data.is_unlimited,
-      });
-      localStorage.setItem(
-        `traffic_refresh_ts_${subscription?.id ?? 'default'}`,
-        Date.now().toString(),
-      );
-      if (data.rate_limited && data.retry_after_seconds) {
-        setTrafficRefreshCooldown(data.retry_after_seconds);
-      } else {
-        setTrafficRefreshCooldown(30);
-      }
-      queryClient.invalidateQueries({ queryKey: ['subscription', subscription?.id] });
-    },
-    onError: (error: {
-      response?: { status?: number; headers?: { get?: (key: string) => string } };
-    }) => {
-      if (error.response?.status === 429) {
-        const retryAfter = error.response.headers?.get?.('Retry-After');
-        setTrafficRefreshCooldown(retryAfter ? parseInt(retryAfter, 10) : 30);
-      }
-    },
-  });
-
-  // Cooldown timer
-  useEffect(() => {
-    if (trafficRefreshCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setTrafficRefreshCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [trafficRefreshCooldown]);
-
-  // Auto-refresh traffic on mount (with 30s caching)
-  const hasAutoRefreshed = useRef(false);
-
-  useEffect(() => {
-    if (!subscription) return;
-    if (hasAutoRefreshed.current) return;
-    hasAutoRefreshed.current = true;
-
-    const lastRefresh = localStorage.getItem(`traffic_refresh_ts_${subscription?.id ?? 'default'}`);
-    const now = Date.now();
-    const cacheMs = API.TRAFFIC_CACHE_MS;
-
-    if (lastRefresh && now - parseInt(lastRefresh, 10) < cacheMs) {
-      const elapsed = now - parseInt(lastRefresh, 10);
-      const remaining = Math.ceil((cacheMs - elapsed) / 1000);
-      if (remaining > 0) {
-        setTrafficRefreshCooldown(remaining);
-      }
+  // Quick-renew (lifted from SubscriptionCardExpired) — 30-day renew from balance.
+  const handleQuickRenew = async () => {
+    if (!subscription) {
+      navigate('/subscription/buy');
       return;
     }
+    setIsRenewing(true);
+    setRenewError(null);
+    try {
+      if (subscription.is_daily && subscription.status === 'disabled') {
+        await subscriptionApi.togglePause(subscription.id);
+      } else if (subscription.is_daily && subscription.tariff_id) {
+        await subscriptionApi.purchaseTariff(subscription.tariff_id, 1, undefined, subscription.id);
+      } else {
+        await subscriptionApi.renewSubscription(30, subscription.id);
+      }
+      queryClient.invalidateQueries({
+        predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'subscription',
+      });
+      queryClient.invalidateQueries({ queryKey: ['subscriptions-list'] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-options'] });
+    } catch (err: unknown) {
+      if (getInsufficientBalanceError(err)) {
+        // Not enough balance — send the user to renew/top-up rather than failing silently.
+        navigate(`/subscription/${subscription.id}/renew`);
+        return;
+      }
+      if (err instanceof AxiosError && typeof err.response?.data?.detail === 'string') {
+        setRenewError(err.response.data.detail);
+      } else {
+        setRenewError(t('dashboard.expired.renewError'));
+      }
+    } finally {
+      setIsRenewing(false);
+    }
+  };
 
-    refreshTrafficMutation.mutate();
-  }, [subscription, refreshTrafficMutation]);
-
-  // В multi-tariff /cabinet/subscription отключён, поэтому subscriptionResponse=undefined.
-  // Используем список из /cabinet/subscriptions/list — пустой массив означает «нет подписок»,
-  // и тогда показываем TrialOfferCard. Без этой ветки multi-tariff юзер никогда не видел триал.
+  // ── Derive the светофор state once (hi-fi §2.2) ──
   const hasNoSubscription = isMultiTariff
     ? multiSubData !== undefined && (multiSubData.subscriptions?.length ?? 0) === 0
     : subscriptionResponse?.has_subscription === false && !subLoading;
 
-  // Есть ли НАСТОЯЩАЯ (платная, не триал) живая подписка — от этого зависит CTA:
-  // «+ Купить ещё» только при наличии платной; иначе явная «Посмотреть тарифы».
-  const hasActivePaid = (multiSubData?.subscriptions ?? []).some(
-    (s) => !s.is_trial && (s.status === 'active' || s.status === 'limited'),
-  );
+  const statusState: StatusCardState = useMemo(() => {
+    if (!subscription) return 'inactive';
+    if (subscription.is_expired || subscription.status === 'disabled' || subscription.is_limited) {
+      return 'expired';
+    }
+    if (subscription.days_left <= EXPIRING_THRESHOLD_DAYS) return 'expiring';
+    return 'protected';
+  }, [subscription]);
 
-  // Show onboarding for new users after data loads
+  const connectedDevices = devicesData?.total ?? 0;
+  const trialAvailable = trialInfo?.is_available ?? false;
+
+  // Onboarding (Layer B coach-marks) — point at the светофор + Подключить tab.
   useEffect(() => {
-    if (!isOnboardingCompleted && !subLoading && !refLoading && !blockingType) {
+    if (wizardSeen && !isOnboardingCompleted && !subLoading && !blockingType) {
       const timer = setTimeout(() => setShowOnboarding(true), 500);
       return () => clearTimeout(timer);
     }
-  }, [isOnboardingCompleted, subLoading, refLoading, blockingType]);
+  }, [wizardSeen, isOnboardingCompleted, subLoading, blockingType]);
 
   const onboardingSteps = useMemo(() => {
     type Placement = 'top' | 'bottom' | 'left' | 'right';
-    const steps: Array<{
-      target: string;
-      title: string;
-      description: string;
-      placement: Placement;
-    }> = [
+    return [
       {
-        target: 'welcome',
+        target: 'status-card',
         title: t('onboarding.steps.welcome.title'),
         description: t('onboarding.steps.welcome.description'),
-        placement: 'bottom',
-      },
-      {
-        target: 'balance',
-        title: t('onboarding.steps.balance.title'),
-        description: t('onboarding.steps.balance.description'),
-        placement: 'bottom',
+        placement: 'bottom' as Placement,
       },
     ];
-
-    if (subscription?.subscription_url) {
-      steps.splice(1, 0, {
-        target: 'connect-devices',
-        title: t('onboarding.steps.connectDevices.title'),
-        description: t('onboarding.steps.connectDevices.description'),
-        placement: 'bottom',
-      });
-    }
-
-    return steps;
-  }, [t, subscription]);
+  }, [t]);
 
   const handleOnboardingComplete = () => {
     completeOnboarding();
     setShowOnboarding(false);
   };
 
+  // Loading skeleton for the status card
+  const showSkeleton = !isMultiTariff && subLoading;
+  // Trial branch still resolving — avoid a flash of the ⚪ card before trialInfo lands.
+  const trialPending = hasNoSubscription && trialLoading;
+
+  // ── Contextual card (exactly ONE, by priority — hi-fi §2.5) ──
+  // 🔴/🟡 → none (renew is already the CTA). ⚪ → none (single trial CTA).
+  // 🟢 → invite-friend (growth).
+  const showInviteCard = statusState === 'protected';
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div data-onboarding="welcome">
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-          {t('dashboard.welcome', { name: displayName(user) })}
-        </h1>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <p className="text-dark-400">{t('dashboard.yourSubscription')}</p>
-          {promoGroupData?.group_name && (
-            <span
-              className="inline-flex max-w-[160px] items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-              style={{
-                background: 'rgba(var(--color-accent-400), 0.1)',
-                border: '1px solid rgba(var(--color-accent-400), 0.2)',
-                color: 'rgb(var(--color-accent-400))',
-              }}
-            >
-              <StarIcon filled className="h-2.5 w-2.5 shrink-0" />
-              <span className="truncate">{promoGroupData.group_name}</span>
-            </span>
-          )}
-        </div>
-      </div>
+    <div className="space-y-0">
+      <Kicker className="mb-3">{t('home.kicker')}</Kicker>
 
-      {/* Pending Gift Activations */}
-      {pendingGifts && pendingGifts.length > 0 && <PendingGiftCard gifts={pendingGifts} />}
-
-      {/* Multi-tariff: show subscription cards (max 3) — только когда подписки
-          реально есть. Пустой случай (нет подписок) ведёт блок ниже (триал/покупка),
-          иначе кнопка покупки дублировалась. */}
-      {isMultiTariff && multiSubData?.subscriptions && multiSubData.subscriptions.length > 0 && (
+      {/* Multi-tariff: keep the existing list (out of scope for this slice's redesign). */}
+      {isMultiTariff && multiSubData?.subscriptions && multiSubData.subscriptions.length > 0 ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-sm font-medium opacity-60">
-              {t('dashboard.subscriptions', 'Подписки')}
-            </span>
-            <Link to="/subscriptions" className="text-xs text-accent-400 hover:underline">
-              {t('dashboard.manageAll', 'Управление')} →
-            </Link>
-          </div>
           {multiSubData.subscriptions.slice(0, 3).map((sub) => (
             <SubscriptionListCard
               key={sub.id}
               subscription={sub}
-              onClick={() => navigate(`/subscriptions/${sub.id}`)}
+              onClick={() => navigate(`/subscription/${sub.id}`)}
             />
           ))}
-          {multiSubData.subscriptions.length > 3 && (
-            <Link
-              to="/subscriptions"
-              className="flex w-full items-center justify-center rounded-2xl border border-dashed border-white/15 p-3 text-xs opacity-50 transition-opacity hover:opacity-80"
-            >
-              {t('dashboard.showAll', 'Показать все')} ({multiSubData.subscriptions.length})
-            </Link>
-          )}
-          {hasActivePaid ? (
-            <Link
-              to="/subscription/purchase"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500/15 p-3.5 text-sm font-medium text-accent-400 transition-all hover:bg-accent-500/25"
-            >
-              <span className="text-base">+</span>{' '}
-              {t('subscriptions.buyAnother', 'Купить ещё тариф')}
-            </Link>
-          ) : (
-            <Link
-              to="/subscription/purchase"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 p-3.5 text-sm font-semibold text-white transition-colors hover:bg-accent-600"
-            >
-              <span className="text-base">+</span>{' '}
-              {t('subscriptions.browsePlans', 'Посмотреть тарифы и купить подписку')}
-            </Link>
-          )}
-        </div>
-      )}
-
-      {/* Subscription Status Card — hidden in multi-tariff (managed via /subscriptions) */}
-      {!isMultiTariff && (
-        <>
-          {subLoading ? (
-            <div className="bento-card">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="skeleton h-5 w-20" />
-                <div className="skeleton h-6 w-16 rounded-full" />
-              </div>
-              <div className="skeleton mb-3 h-10 w-32" />
-              <div className="skeleton mb-3 h-4 w-40" />
-              <div className="skeleton h-3 w-full rounded-full" />
-              <div className="mt-5">
-                <div className="skeleton h-12 w-full rounded-xl" />
-              </div>
-            </div>
-          ) : subscription?.is_expired ||
-            subscription?.status === 'disabled' ||
-            subscription?.is_limited ? (
-            <SubscriptionCardExpired
-              subscription={subscription}
-              balanceKopeks={balanceData?.balance_kopeks ?? 0}
-              balanceRubles={balanceData?.balance_rubles ?? 0}
-            />
-          ) : subscription ? (
-            <SubscriptionCardActive
-              subscription={subscription}
-              trafficData={trafficData}
-              refreshTrafficMutation={refreshTrafficMutation}
-              trafficRefreshCooldown={trafficRefreshCooldown}
-              connectedDevices={devicesData?.total ?? 0}
-            />
-          ) : null}
-        </>
-      )}
-
-      {/* Нет подписок: показываем триал (если доступен) и ВСЕГДА одну явную
-          кнопку покупки. Триал не обязателен, чтобы попасть в витрину — раньше
-          при доступном триале это был единственный экран без кнопки покупки
-          (Telegram-баг #605056/#605063). Единственная кнопка тут (вместо дубля
-          с мульти-тариф блоком). */}
-      {hasNoSubscription && !trialLoading && (
-        <div className="space-y-3">
-          {trialInfo?.is_available && (
-            <TrialOfferCard
-              trialInfo={trialInfo}
-              balanceKopeks={balanceData?.balance_kopeks || 0}
-              balanceRubles={balanceData?.balance_rubles || 0}
-              activateTrialMutation={activateTrialMutation}
-              trialError={trialError}
-            />
-          )}
-          <Link
-            to="/subscription/purchase"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-500 p-3.5 text-sm font-semibold text-white transition-colors hover:bg-accent-600"
+          <PillButton
+            variant="primary"
+            leadingIcon={<ArrowRightIcon className="h-5 w-5" />}
+            onClick={() => navigate('/subscription/buy')}
           >
-            <span className="text-base">+</span>{' '}
             {t('subscriptions.browsePlans', 'Посмотреть тарифы и купить подписку')}
-          </Link>
+          </PillButton>
+        </div>
+      ) : showSkeleton || trialPending ? (
+        <div className="rounded-4xl border border-champagne-300 bg-champagne-50 p-7 dark:border-dark-700/40 dark:bg-dark-900/60">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="skeleton h-6 w-32 rounded-lg" />
+            <div className="skeleton h-10 w-16 rounded-lg" />
+          </div>
+          <div className="skeleton mb-6 h-4 w-48 rounded" />
+          <div className="skeleton h-14 w-full rounded-full" />
+        </div>
+      ) : (
+        <div data-onboarding="status-card">
+          <StatusCard
+            state={statusState}
+            subscription={subscription}
+            trialAvailable={trialAvailable}
+            trialUsed={!trialAvailable && hasNoSubscription}
+            connectedDevices={connectedDevices}
+            trialActivating={activateTrialMutation.isPending}
+            renewing={isRenewing}
+            onActivateTrial={() =>
+              !activateTrialMutation.isPending && activateTrialMutation.mutate()
+            }
+            onRenew={handleQuickRenew}
+            errorMessage={statusState === 'inactive' ? trialError : renewError}
+          />
         </div>
       )}
 
-      {/* Promo Offers */}
-      <PromoOffersSection />
+      {/* Balance chip — inline, low-prominence, neutral (hi-fi §2.3) */}
+      <div className="mt-4 flex items-center justify-between rounded-full border border-champagne-300 bg-champagne-100 px-4 py-2.5 dark:border-dark-700/40 dark:bg-dark-800/60">
+        <span className="font-mono text-[11px] uppercase tracking-wider text-champagne-600 dark:text-dark-400">
+          {t('home.balance.label')}{' '}
+          <span className="font-sans font-semibold normal-case tracking-normal text-champagne-900 dark:text-dark-50">
+            {(balanceData?.balance_rubles ?? 0).toLocaleString('ru-RU')} ₽
+          </span>
+        </span>
+        <Link
+          to="/subscription/balance/top-up"
+          className="text-[13px] font-medium text-accent-600 hover:underline"
+        >
+          {t('home.balance.topup')}
+        </Link>
+      </div>
 
-      {/* Stats Grid */}
-      <StatsGrid
-        balanceRubles={balanceData?.balance_rubles || 0}
-        referralCount={referralInfo?.total_referrals || 0}
-        earningsRubles={referralInfo?.available_balance_rubles || 0}
-        refLoading={refLoading}
-      />
-
-      {/* Fortune Wheel Banner */}
-      {wheelConfig?.is_enabled && (
-        <Link to="/wheel" className="bento-card-hover group flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-3xl">🎰</span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-base font-semibold text-dark-100">{t('wheel.banner.title')}</h3>
-              <p className="text-sm text-dark-400">{t('wheel.banner.description')}</p>
-            </div>
-          </div>
-          <div className="flex-shrink-0 text-dark-500 transition-all duration-300 group-hover:translate-x-1 group-hover:text-accent-400">
-            <ChevronRightIcon />
-          </div>
+      {/* One contextual card (invite-friend on 🟢) */}
+      {showInviteCard && (
+        <Link
+          to="/account/invite"
+          className="mt-3 flex items-center gap-3 rounded-bento border border-champagne-300 bg-champagne-100 p-4 transition-colors hover:bg-champagne-200 dark:border-dark-700/40 dark:bg-dark-800/60"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-600">
+            <GiftIcon className="h-5 w-5" />
+          </span>
+          <span className="flex-1 text-[14px] font-medium text-champagne-900 dark:text-dark-50">
+            {t('home.invite.title')}
+          </span>
+          <ArrowRightIcon className="h-5 w-5 shrink-0 text-champagne-500" />
         </Link>
       )}
 
-      {/* News Section */}
-      <NewsSection />
+      {/* Onboarding value wizard (Layer A) — value-first, shown before the tour */}
+      {!wizardSeen && hasNoSubscription && (
+        <OnboardingWizard
+          onTrial={() => {
+            markWizardSeen();
+            activateTrialMutation.mutate();
+          }}
+          onBuy={() => {
+            markWizardSeen();
+            navigate('/subscription/buy');
+          }}
+          onClose={markWizardSeen}
+        />
+      )}
 
-      {/* Onboarding Tutorial */}
+      {/* Onboarding Tutorial (Layer B coach-marks) */}
       {showOnboarding && (
         <Onboarding
           steps={onboardingSteps}
