@@ -12,6 +12,7 @@ import { resolveTemplate, hasTemplates } from '../utils/templateEngine';
 import { isHappCryptolinkMode, resolveConnectionUrlForUi } from '../utils/connectionLink';
 import { copyToClipboard } from '../utils/clipboard';
 import { detectPlatform, platformDetectKey, type DetectedPlatform } from '../utils/detectPlatform';
+import { cn } from '@/lib/utils';
 import type { AppConfig, RemnawaveAppClient, RemnawavePlatformData } from '../types';
 
 import { Kicker } from '@/components/ui/Kicker';
@@ -67,6 +68,8 @@ export default function ConnectPage() {
   const notify = useNotify();
 
   const detected = useMemo<DetectedPlatform>(() => detectPlatform(), []);
+  // One-tap deep-link (happ://) only resolves on mobile with the app installed.
+  const isOneTapPlatform = detected === 'ios' || detected === 'android';
   const [platformOverride, setPlatformOverride] = useState<string | null>(detected);
   const activePlatform = platformOverride;
 
@@ -378,25 +381,28 @@ export default function ConnectPage() {
           </h2>
         </div>
 
-        <PillButton
-          variant="primary"
-          leadingIcon={<PowerIcon className="h-5 w-5" />}
-          disabled={
-            !featuredApp?.deepLink && !qrConnectionUrl && !connectionLink?.happ_scheme_link
-          }
-          onClick={() => {
-            // One-tap = open the Happ deep-link (happ://add/<sub>) so the app
-            // launches and adds the subscription. Fall back to the raw connection
-            // link only if no app deep-link exists.
-            const link =
-              featuredApp?.deepLink || connectionLink?.happ_scheme_link || qrConnectionUrl;
-            if (link) openDeepLink(link);
-          }}
-        >
-          {t('connect.oneTap.button')}
-        </PillButton>
+        {/* One-tap opens the Happ deep-link (happ://add/<sub>). The scheme only
+            resolves on mobile where the app is installed; on desktop it falls
+            through to the raw sub URL and just opens the JSON in the browser, so
+            we hide it there and lead with QR / copy instead. */}
+        {isOneTapPlatform && (
+          <PillButton
+            variant="primary"
+            leadingIcon={<PowerIcon className="h-5 w-5" />}
+            disabled={
+              !featuredApp?.deepLink && !qrConnectionUrl && !connectionLink?.happ_scheme_link
+            }
+            onClick={() => {
+              const link =
+                featuredApp?.deepLink || connectionLink?.happ_scheme_link || qrConnectionUrl;
+              if (link) openDeepLink(link);
+            }}
+          >
+            {t('connect.oneTap.button')}
+          </PillButton>
+        )}
 
-        <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+        <div className={cn('grid grid-cols-2 gap-2.5', isOneTapPlatform && 'mt-2.5')}>
           <PillButton
             variant="soft"
             leadingIcon={<QrGlyph className="h-5 w-5" />}
