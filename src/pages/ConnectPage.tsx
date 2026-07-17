@@ -198,6 +198,37 @@ export default function ConnectPage() {
     return apps.find((a) => a.featured) || apps[0];
   }, [platformData]);
 
+  // The featured app's store/download URL — the first `external` button across
+  // its blocks. This is the correct target for the «Установить» action (unlike
+  // deepLink, which is the happ://add scheme for an already-installed app).
+  const installUrl = useMemo<string | undefined>(() => {
+    for (const block of featuredApp?.blocks ?? []) {
+      for (const btn of block.buttons ?? []) {
+        if (btn.type === 'external') {
+          const u = btn.resolvedUrl || btn.url || btn.link;
+          if (u) return u;
+        }
+      }
+    }
+    return undefined;
+  }, [featuredApp]);
+
+  const openExternalUrl = useCallback(
+    (url: string) => {
+      hapticImpact('light');
+      if (isTelegramWebApp) {
+        try {
+          sdkOpenLink(url, { tryInstantView: false });
+          return;
+        } catch {
+          /* fall through to a normal navigation */
+        }
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    },
+    [isTelegramWebApp, hapticImpact],
+  );
+
   const hasApps = useMemo(() => {
     if (!appConfig?.platforms) return false;
     return Object.values(appConfig.platforms).some(
@@ -357,9 +388,11 @@ export default function ConnectPage() {
             variant="dark"
             leadingIcon={<DownloadIcon className="h-5 w-5" />}
             onClick={() => {
-              if (featuredApp?.deepLink) {
-                // The install action opens the app's store/deep-link (same handler set).
-                openDeepLink(featuredApp.deepLink);
+              // Install = open the app's store/download page (the external button
+              // in its blocks). deepLink is the happ://add scheme — useless to a
+              // user who hasn't installed the app yet. Fall back to the full guide.
+              if (installUrl) {
+                openExternalUrl(installUrl);
               } else {
                 setShowOther(true);
               }

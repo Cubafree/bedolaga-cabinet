@@ -19,7 +19,13 @@ export function detectPlatform(): DetectedPlatform {
   const ua = navigator.userAgent.toLowerCase();
   if (/iphone|ipad|ipod/.test(ua)) return 'ios';
   if (/android/.test(ua)) return /tv|television/.test(ua) ? 'androidTV' : 'android';
-  if (/macintosh|mac os x/.test(ua)) return 'macos';
+  if (/macintosh|mac os x/.test(ua)) {
+    // iPadOS 13+ reports a Macintosh UA; touch points reveal it's actually an
+    // iPad (a real Mac reports maxTouchPoints 0). Treat it as iOS so the Happ
+    // deep-link / one-tap path stays available.
+    if (navigator.maxTouchPoints > 1) return 'ios';
+    return 'macos';
+  }
   if (/windows/.test(ua)) return 'windows';
   if (/linux/.test(ua)) return 'linux';
   return null;
