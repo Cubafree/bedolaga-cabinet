@@ -8917,11 +8917,9 @@
     }
   },
   "plural": {
-    "days": {
-      "one": "{{n}} день",
-      "few": "{{n}} дня",
-      "many": "{{n}} дней"
-    }
+    "days_one": "{{count}} день",
+    "days_few": "{{count}} дня",
+    "days_many": "{{count}} дней"
   },
   "action": {
     "connect": "Подключить",

@@ -8302,11 +8302,8 @@
     }
   },
   "plural": {
-    "days": {
-      "one": "{{n}} day",
-      "few": "{{n}} days",
-      "many": "{{n}} days"
-    }
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
   },
   "action": {
     "connect": "Connect",
