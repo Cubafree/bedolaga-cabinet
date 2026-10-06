@@ -67,3 +67,36 @@ export function humanPaymentMethodHint(method: Pick<PaymentMethod, 'id' | 'name'
   if (!kind) return null;
   return i18next.t(`balance.details.method.${kind}Hint`, { defaultValue: '' }) || null;
 }
+
+export interface PaymentMethodDisplay {
+  label: string;
+  hint: string | null;
+}
+
+/**
+ * Labels for a whole list of methods. A type that is offered once keeps the
+ * generic label («Карта РФ»). When several methods share a type, generic labels
+ * would be indistinguishable, so each falls back to `method.name` — the backend
+ * fills it from the operator's display_name override (admin → payment methods),
+ * so the operator controls the wording. An operator-set description always wins
+ * over the generic hint.
+ */
+export function buildPaymentMethodDisplay(
+  methods: ReadonlyArray<Pick<PaymentMethod, 'id' | 'name' | 'description'>>,
+): Map<string, PaymentMethodDisplay> {
+  const kindCounts = new Map<HumanMethodKind, number>();
+  for (const method of methods) {
+    const kind = classifyPaymentMethod(method);
+    kindCounts.set(kind, (kindCounts.get(kind) ?? 0) + 1);
+  }
+  const result = new Map<string, PaymentMethodDisplay>();
+  for (const method of methods) {
+    const kind = classifyPaymentMethod(method);
+    const ambiguous = kind !== null && (kindCounts.get(kind) ?? 0) > 1;
+    result.set(method.id, {
+      label: ambiguous && method.name ? method.name : humanPaymentMethodLabel(method),
+      hint: method.description || humanPaymentMethodHint(method),
+    });
+  }
+  return result;
+}

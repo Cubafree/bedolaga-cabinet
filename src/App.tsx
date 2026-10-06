@@ -280,6 +280,12 @@ function BlockingOverlay() {
   return null;
 }
 
+/** Old /connection(/qr) → /connect, keeping the query (`?sub=N` picks the subscription). */
+function ConnectionRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/connect${search}`} replace />;
+}
+
 /** Redirect /subscription/:id → /subscriptions/:id preserving the param */
 function LegacySubscriptionRedirect() {
   const { subscriptionId } = useParams<{ subscriptionId: string }>();
@@ -617,8 +623,8 @@ function App() {
           }
         />
         {/* Old connection routes → new /connect tab. */}
-        <Route path="/connection" element={<Navigate to="/connect" replace />} />
-        <Route path="/connection/qr" element={<Navigate to="/connect" replace />} />
+        <Route path="/connection" element={<ConnectionRedirect />} />
+        <Route path="/connection/qr" element={<ConnectionRedirect />} />
         <Route
           path="/referral/partner/apply"
           element={

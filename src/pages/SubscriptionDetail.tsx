@@ -639,7 +639,9 @@ export default function SubscriptionDetail() {
               variant="ghost"
               leadingIcon={<PowerIcon className="h-5 w-5" />}
               disabled={isAtDeviceLimit}
-              onClick={() => navigate('/connect')}
+              onClick={() =>
+                navigate(subscriptionId ? `/connect?sub=${subscriptionId}` : '/connect')
+              }
             >
               {isAtDeviceLimit
                 ? t('subscription.details.devices.limitReached')
