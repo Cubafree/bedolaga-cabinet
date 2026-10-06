@@ -77,7 +77,11 @@
     "wheel": "Fortune Wheel",
     "menu": "Menu",
     "gift": "Gift",
-    "navigation": "Navigation"
+    "navigation": "Navigation",
+    "home": "Home",
+    "connect": "How to connect",
+    "help": "Help",
+    "account": "Account"
   },
   "notifications": {
     "ticketNotifications": "Ticket Notifications",
@@ -836,6 +840,94 @@
       "autopayHint": "Your subscription will renew automatically via Cashera",
       "purchaseButton": "⚡ Subscribe with Cashera auto-pay",
       "purchaseHint": "Confirm auto-charges via the Cashera link; renewals are then charged automatically."
+    },
+    "buyKicker": "Choose a plan",
+    "tariffLabel": "Plan",
+    "periodLabel": "Period",
+    "yourBalance": "Your balance",
+    "topUp": "Top up",
+    "yourTariff": "Your plan",
+    "configure": "Customize (period and traffic)",
+    "perDayShort": "/day",
+    "pay": {
+      "total": "Total",
+      "missing": "Short by",
+      "surcharge": "Extra charge",
+      "surchargeAtSwitch": "calculated when you switch",
+      "payFromBalance": "Pay {{amount}} from balance",
+      "topUpDeltaAndPay": "Top up {{amount}} and pay",
+      "topUpAndPay": "Top up and pay",
+      "switch": "Switch plan",
+      "connect": "Connect",
+      "paying": "Paying…",
+      "unavailable": "Unavailable",
+      "resumeToast": "Balance topped up — paying for your subscription"
+    },
+    "details": {
+      "status": {
+        "label": "Status",
+        "active": "Active",
+        "expiring": "Expiring soon",
+        "expired": "Expired",
+        "none": "No active subscription"
+      },
+      "validUntil": "Valid until {{date}}",
+      "expiredOn": "Expired on {{date}}",
+      "none": {
+        "text": "Get a subscription — and enjoy the internet without borders again."
+      },
+      "plan": {
+        "title": "Your plan",
+        "trafficUnlimited": "Unlimited traffic",
+        "trafficLimited": "Traffic: {{amount}}",
+        "trafficLeft": "{{amount}} left",
+        "devices": "Up to {{n}} devices at once",
+        "devicesUnlimited": "Unlimited devices",
+        "countries": "Access to all countries",
+        "speed": "High speed, no limits",
+        "legacy": "Legacy subscription",
+        "legacyHint": "Created before plans were introduced — works as before."
+      },
+      "action": {
+        "extend": "Renew",
+        "changePlan": "Change plan",
+        "changeCountry": "Change country",
+        "buy": "Get a subscription",
+        "refreshAccess": "Refresh access",
+        "refreshAccessHint": "Resets connections and issues a new link — in case your access has leaked.",
+        "refreshCooldown": "Available in {{minutes}} min {{seconds}} sec",
+        "refreshWarning": "This will disconnect all your devices and issue a new connection link. The old link will stop working. Continue?",
+        "refreshConfirm": "Refresh access",
+        "more": "More"
+      },
+      "autopay": {
+        "title": "Auto-renewal",
+        "on": "On",
+        "off": "Off",
+        "onHint": "We'll charge for renewal automatically — your VPN won't turn off.",
+        "offHint": "We'll remind you in advance — renew manually.",
+        "daysBefore_one": "We'll charge {{count}} day before it expires",
+        "daysBefore_other": "We'll charge {{count}} days before it expires"
+      },
+      "devices": {
+        "title": "Devices",
+        "subtitle": "{{n}} of {{max}} connected",
+        "subtitleUnlimited": "{{n}} connected",
+        "add": "Connect a device",
+        "current": "This device",
+        "rename": "Rename",
+        "remove": "Disconnect",
+        "removeAll": "Disconnect all",
+        "removeConfirmTitle": "Disconnect device?",
+        "removeConfirmText": "VPN will stop working on it. This frees up a slot for another device.",
+        "removeAllConfirm": "Disconnect all devices?",
+        "empty": "No connected devices yet",
+        "limitReached": "Device limit reached",
+        "limitReachedHint": "Disconnect one of your devices or upgrade your plan to connect a new one."
+      },
+      "advanced": "Advanced",
+      "manageMore": "Add devices and traffic",
+      "loadError": "Couldn't load your subscription. Please try again a bit later."
     }
   },
   "balance": {
@@ -1045,7 +1137,47 @@
       "tryAgain": "Try Again"
     },
     "top_up": "Top up balance",
-    "scanQrToPay": "Scan the QR code in your banking app or open the payment page"
+    "scanQrToPay": "Scan the QR code in your banking app or open the payment page",
+    "details": {
+      "currentLabel": "Your balance",
+      "emptyLabel": "Balance is empty",
+      "hint": "Your subscription and renewals are paid from your balance.",
+      "topup": "Top up balance",
+      "topupTitle": "Top up balance",
+      "amountTitle": "Top-up amount",
+      "amountCustom": "Other amount",
+      "methodTitle": "Payment method",
+      "method": {
+        "sbp": "SBP",
+        "card": "Russian card",
+        "crypto": "Cryptocurrency",
+        "stars": "Telegram Stars",
+        "sbpHint": "Pay by phone number, no card details needed.",
+        "cardHint": "Russian bank card.",
+        "cryptoHint": "Pay with cryptocurrency.",
+        "starsHint": "Pay with Telegram Stars."
+      },
+      "pay": "Top up {{amount}}",
+      "historyTitle": "Transaction history",
+      "history": {
+        "topup": "Top-up",
+        "payment": "Subscription payment",
+        "referral": "Referral bonus",
+        "gift": "Gift",
+        "refund": "Refund"
+      },
+      "historyEmpty": "No transactions yet",
+      "historyEmptyText": "Your top-ups and payments will appear here.",
+      "cardsTitle": "Saved cards",
+      "cardsSubtitle": "To pay faster next time.",
+      "cardItem": "Card •• {{last4}}",
+      "cardRemove": "Remove",
+      "cardRemoveConfirmTitle": "Remove card?",
+      "cardRemoveConfirmText": "The card will no longer be saved.",
+      "cardsEmpty": "No saved cards yet.",
+      "cardsSecurity": "Card details are stored by the payment provider, not by us.",
+      "loadError": "Couldn't load your balance. Please try again."
+    }
   },
   "referral": {
     "title": "Referral Program",
@@ -1287,7 +1419,10 @@
       "alreadyOpenTicket": "You already have an open ticket. Please continue the conversation there — a new ticket can be created once the current one is closed.",
       "createFailed": "Could not create the ticket. Please try again.",
       "replyFailed": "Could not send the reply. Please try again."
-    }
+    },
+    "errorGeneric": "Couldn't send. Please try again.",
+    "errorRateLimit": "Too many requests, try again in a few seconds",
+    "errorMaintenance": "The service is under maintenance, please try later"
   },
   "wheel": {
     "title": "Fortune Wheel",
@@ -7867,5 +8002,316 @@
     "subscription": {
       "untitled": "Subscription"
     }
+  },
+  "help": {
+    "title": "Help",
+    "subtitle": "We'll show you how to connect and answer your questions.",
+    "connect": {
+      "title": "How to connect",
+      "subtitle": "Choose your device — we'll walk you through it step by step.",
+      "platform": {
+        "ios": "iPhone / iPad",
+        "android": "Android",
+        "windows": "Computer (Windows)",
+        "tv": "TV",
+        "other": "Other device"
+      },
+      "openFlow": "Connect now"
+    },
+    "steps": {
+      "ios": {
+        "1": "Install the free Happ app from the App Store.",
+        "2": "Come back here and tap “Connect” — the app will open by itself.",
+        "3": "When your phone asks, allow adding the VPN configuration.",
+        "4": "Done — the VPN icon will appear at the top of the screen.",
+        "check": "Open Instagram or YouTube. If it loads, everything works.",
+        "button": "Install Happ"
+      },
+      "android": {
+        "1": "Install the free Happ app from Google Play.",
+        "2": "Come back here and tap “Connect” — the app will open by itself.",
+        "3": "When your phone asks, allow the connection.",
+        "4": "Done — an icon will show that the VPN is on.",
+        "check": "Open Instagram or YouTube. If it loads, everything works.",
+        "button": "Install Happ"
+      },
+      "windows": {
+        "1": "Download the desktop app and install it.",
+        "2": "Open the app.",
+        "3": "Copy the connection link here and paste it into the app.",
+        "4": "Click “Connect” in the app.",
+        "check": "Open a website that didn't load before. If it works, you're all set.",
+        "button": "Download the app",
+        "copyLink": "Copy link"
+      },
+      "tv": {
+        "1": "Find Happ in your TV's app store and install it.",
+        "2": "Open the app — a QR code will appear on the screen.",
+        "3": "Point your phone's camera at the QR code — the TV will connect by itself.",
+        "4": "Done, enjoy watching.",
+        "check": "Play a video that didn't load before. If it plays, everything works.",
+        "showQr": "Show QR code"
+      }
+    },
+    "faq": {
+      "title": "FAQ",
+      "whatIsVpn": {
+        "q": "What is a VPN?",
+        "a": "It's a way to open sites and apps that stopped working. Turn on the VPN — and the internet works like before."
+      },
+      "isSafe": {
+        "q": "Is it safe?",
+        "a": "Yes. A VPN actually protects your connection: data travels through a private channel and outsiders can't see it. We don't keep a history of what you open."
+      },
+      "isLegal": {
+        "q": "Is it legal?",
+        "a": "Yes, using a VPN is allowed. You simply get access to the services you're used to."
+      },
+      "notWorking": {
+        "q": "Why isn't it working?",
+        "a": "Usually one of three things helps: make sure the VPN is on in the app; turn it off and on again; restart the app. If that doesn't help — message us and we'll sort it out."
+      },
+      "howToPay": {
+        "q": "How do I pay?",
+        "a": "On the “Balance” screen, choose a method: SBP, Russian card or cryptocurrency. Payment takes a couple of minutes, and your subscription will renew automatically."
+      },
+      "howManyDevices": {
+        "q": "How many devices can I connect?",
+        "a": "It depends on your plan. You can see how many devices you have on the “Subscription” screen. Phone, computer and TV at the same time — no problem."
+      },
+      "howToCancel": {
+        "q": "How do I cancel my subscription?",
+        "a": "Just don't renew — the subscription will end on its own and you won't be charged again. You can turn off auto-renewal on the “Subscription” screen."
+      },
+      "noEmail": {
+        "q": "I didn't get the email",
+        "a": "Wait a couple of minutes and check your Spam folder. If it's still not there, tap “Send again” or message us."
+      },
+      "slow": {
+        "q": "The internet is slow",
+        "a": "Try choosing another country on the subscription screen — it often speeds up the connection. If it's slow everywhere, message us."
+      },
+      "whatIsTraffic": {
+        "q": "What is traffic?",
+        "a": "It's the amount of data you use. Most plans have unlimited traffic — watch as many videos as you like."
+      },
+      "changeCountry": {
+        "q": "How do I change the country?",
+        "a": "On the “Subscription” screen, tap “Change country” and pick the one you need. The VPN will switch in a couple of seconds."
+      },
+      "refundExpired": {
+        "q": "My subscription has expired, what now?",
+        "a": "Renew it on the “Subscription” or “Balance” screen — and the VPN will turn back on. No need to set anything up again."
+      }
+    },
+    "support": {
+      "title": "Didn't find an answer?",
+      "text": "Message us — we'll help you connect and sort out any problem. We reply quickly.",
+      "button": "Contact support",
+      "hours": "We usually reply within an hour.",
+      "telegram": "Support on Telegram"
+    }
+  },
+  "onboard": {
+    "1": {
+      "title": "The internet without borders again",
+      "text": "Social media, videos, games and websites open like before. Turn it on — and it works."
+    },
+    "2": {
+      "title": "One button — and you're done",
+      "text": "No settings. We'll help you connect in a minute, even if you're not into tech."
+    },
+    "3": {
+      "title": "Try it for free",
+      "text": "3 days free, no card required. Don't like it — just don't renew.",
+      "cta": {
+        "trial": "Connect for free",
+        "buy": "Choose a plan"
+      },
+      "skip": "Skip"
+    },
+    "welcome": {
+      "title": "Welcome to RocketJump",
+      "text": "In a minute we'll show you how to get your usual internet back."
+    },
+    "next": "Next",
+    "back": "Back",
+    "start": "Start",
+    "skipAll": "Skip all",
+    "progress": "{{current}} of {{total}}"
+  },
+  "home": {
+    "kicker": "YOUR VPN",
+    "status": {
+      "active": {
+        "title": "Protected",
+        "connectDevice": "Connect a device",
+        "allWorking": "Everything works",
+        "connectMore": "Connect another device"
+      },
+      "expiring": {
+        "title": "Subscription is expiring",
+        "button": "Renew"
+      },
+      "expired": {
+        "title": "Subscription has expired",
+        "button": "Renew subscription"
+      },
+      "none": {
+        "title": "VPN isn't connected yet",
+        "subtitle": "Turn on 3 days free — no card needed.",
+        "subtitleTrialUsed": "Choose a plan — and enjoy the internet without borders again.",
+        "button": "Connect for free",
+        "buttonTrialUsed": "Choose a plan"
+      }
+    },
+    "meta": {
+      "trafficUnlimited": "Traffic: unlimited",
+      "trafficLeft": "{{amount}} of {{total}} left",
+      "devices": "Devices: {{n}}"
+    },
+    "balance": {
+      "label": "Balance",
+      "topup": "Top up"
+    },
+    "invite": {
+      "title": "Invite a friend — get a bonus"
+    }
+  },
+  "connect": {
+    "kicker": "CONNECTION",
+    "title": "Connect a device",
+    "device": {
+      "prefix": "Your device:",
+      "change": "Change"
+    },
+    "detect": {
+      "android": "Android",
+      "ios": "iPhone",
+      "macos": "Mac",
+      "windows": "Windows",
+      "linux": "Linux",
+      "tv": "TV",
+      "unknown": "your device"
+    },
+    "step1": {
+      "title": "Install the app",
+      "appHint": "Free app for connecting",
+      "installButton": "Install {{app}}"
+    },
+    "step2": {
+      "title": "Connect the VPN"
+    },
+    "oneTap": {
+      "button": "Connect in one tap"
+    },
+    "qr": {
+      "title": "Connection QR code",
+      "subtitle": "Scan it with the camera on another phone",
+      "show": "Show QR code"
+    },
+    "link": {
+      "copy": "Copy connection link",
+      "copied": "Link copied"
+    },
+    "other": "Other device",
+    "noSubscription": {
+      "title": "Get a subscription first",
+      "button": "Choose a plan"
+    },
+    "success": {
+      "title": "Done! VPN is working",
+      "proof": "Check it: open Instagram",
+      "backHome": "Back to Home",
+      "retry": "Connect again"
+    }
+  },
+  "account": {
+    "kicker": "YOUR ACCOUNT",
+    "title": "Account",
+    "loading": "Loading profile…",
+    "loadError": "Couldn't load your profile. Try refreshing the page.",
+    "sections": {
+      "profile": "Profile",
+      "more": "Other"
+    },
+    "profile": {
+      "title": "Profile",
+      "name": "Name",
+      "email": "Email",
+      "telegram": "Telegram",
+      "id": "Your ID",
+      "idHint": "Give this number to support so we can find you faster.",
+      "noEmail": "No email set",
+      "noName": "No name set",
+      "namePlaceholder": "Not set",
+      "copyId": "Copy ID",
+      "idCopied": "ID copied ✓"
+    },
+    "devices": {
+      "title": "My devices",
+      "subtitle": "Manage connected devices",
+      "manage": "Manage devices",
+      "connected": "Connected: {{n}}",
+      "emptyHint": "No devices connected yet",
+      "connectCta": "Connect a device"
+    },
+    "linked": {
+      "title": "Sign-in methods",
+      "subtitle": "To sign in to your account faster.",
+      "telegram": "Telegram",
+      "email": "Email",
+      "connected": "Linked",
+      "notConnected": "Not linked",
+      "manage": "Manage sign-in methods"
+    },
+    "referral": {
+      "title": "Invite a friend",
+      "subtitle": "Your friend gets a bonus, and so do you — for everyone who connects.",
+      "linkLabel": "Your invite link",
+      "copy": "Copy link",
+      "copied": "Copied ✓",
+      "share": "Share",
+      "invitedCount": "Friends joined: {{n}}",
+      "earned": "Earned: {{amount}} ₽",
+      "empty": "You haven't invited anyone yet. Share your link — it pays off.",
+      "open": "More about invites"
+    },
+    "gift": {
+      "title": "Gift a subscription",
+      "subtitle": "Pay for a friend's access — they'll get a gift link.",
+      "open": "Gift a subscription"
+    },
+    "settings": {
+      "title": "Settings",
+      "language": "Language",
+      "languageHint": "Account language",
+      "notifications": "Notifications",
+      "notificationsHint": "We'll remind you when your subscription is about to expire.",
+      "notificationsExpiry": "Subscription expiry",
+      "notificationsNews": "News and promotions",
+      "theme": "Theme",
+      "themeLight": "Light",
+      "themeDark": "Dark"
+    },
+    "logout": {
+      "button": "Log out",
+      "confirmTitle": "Log out of your account?",
+      "confirmText": "Your subscription and VPN will keep working. To return to your account, you'll need to sign in again.",
+      "confirmOk": "Log out"
+    }
+  },
+  "plural": {
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
+  },
+  "action": {
+    "connect": "Connect",
+    "copy": "Copy",
+    "copied": "Copied ✓",
+    "refreshAccess": "Refresh access",
+    "back": "Back",
+    "close": "Close",
+    "done": "Done"
   }
 }

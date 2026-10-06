@@ -17,7 +17,10 @@ export default function LanguageSwitcher() {
     queryFn: infoApi.getLanguages,
     staleTime: 1000 * 60 * 5,
   });
-  const availableLanguages = data?.languages ?? [];
+  // Ukrainian intentionally hidden from the cabinet language picker.
+  const availableLanguages = (data?.languages ?? []).filter(
+    (l) => l.code !== 'uk' && l.code !== 'ua',
+  );
 
   const currentLang = availableLanguages.find((l) => l.code === i18n.language) ||
     availableLanguages[0] || { code: 'ru', name: 'RU', flag: '🇷🇺' };

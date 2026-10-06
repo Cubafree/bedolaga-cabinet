@@ -790,7 +790,7 @@ export default function Referral() {
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm text-dark-500">
+        <p className="mt-3 rounded-xl border border-accent-500/30 bg-accent-500/10 px-4 py-3 text-sm font-medium text-accent-300">
           {isLevelsScheme
             ? t('referral.shareHintLevels')
             : t('referral.shareHint', { percent: info?.commission_percent || 0 })}

@@ -77,7 +77,7 @@ function renderPage() {
 
 async function submit() {
   const button = await screen.findByRole('button', {
-    name: /balance\.topUp|Пополнить|balance\.pay/i,
+    name: /balance\.topUp|Пополнить|balance\.pay|balance\.details\.(topup|pay)/i,
   });
   fireEvent.click(button);
 }

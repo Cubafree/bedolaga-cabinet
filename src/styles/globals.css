@@ -159,18 +159,25 @@
     --color-dark-900: 15, 23, 42;
     --color-dark-950: 10, 15, 26;
 
-    /* Champagne palette (RGB values) */
-    --color-champagne-50: 255, 253, 249;
-    --color-champagne-100: 254, 249, 240;
-    --color-champagne-200: 247, 231, 206;
-    --color-champagne-300: 232, 212, 181;
-    --color-champagne-400: 212, 188, 150;
-    --color-champagne-500: 191, 164, 119;
-    --color-champagne-600: 160, 139, 94;
-    --color-champagne-700: 125, 107, 72;
-    --color-champagne-800: 92, 79, 53;
-    --color-champagne-900: 61, 52, 36;
-    --color-champagne-950: 31, 26, 18;
+    /* Champagne palette (RGB values) — tuned to landing cream (see DESIGN_SYSTEM.md).
+       50 = card #FFFCF5, 200 = page bg #F6F1E7, 300 = line #E0D6C0; 100 stays a
+       light cream between 50 and 200 to keep the ramp monotonic. 900 carries the
+       light-theme text token, set to landing navy ink #0E1B2C so .light text reads
+       navy on cream (not brown).
+       NOTE: at runtime applyThemeColors() overwrites this whole ramp from
+       DEFAULT_THEME_COLORS (types/theme.ts) — these values are the pre-hydration
+       fallback and must be kept in sync with that source of truth. */
+    --color-champagne-50: 255, 252, 245;
+    --color-champagne-100: 251, 247, 238;
+    --color-champagne-200: 246, 241, 231;
+    --color-champagne-300: 224, 214, 192;
+    --color-champagne-400: 206, 192, 162;
+    --color-champagne-500: 184, 165, 130;
+    --color-champagne-600: 156, 135, 96;
+    --color-champagne-700: 110, 96, 74;
+    --color-champagne-800: 60, 70, 88;
+    --color-champagne-900: 14, 27, 44;
+    --color-champagne-950: 14, 27, 44;
 
     /* Accent palette (RGB values) - dynamically set by ThemeColorsProvider */
     --color-accent-50: 239, 246, 255;
@@ -237,13 +244,14 @@
     --color-dark-text: #f1f5f9;
     --color-dark-text-secondary: #94a3b8;
 
-    --color-light-bg: #f7e7ce;
-    --color-light-surface: #fef9f0;
-    --color-light-text: #1f1a12;
-    --color-light-text-secondary: #7d6b48;
+    --color-light-bg: #f6f1e7;
+    --color-light-surface: #fffcf5;
+    --color-light-text: #0e1b2c;
+    --color-light-text-secondary: #6a7689;
   }
 
   html {
+    font-size: 17px;
     overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgb(var(--color-dark-700)) transparent;

@@ -46,6 +46,7 @@ import {
   PiUsers,
   PiWallet,
   PiX,
+  PiQrCode,
 } from 'react-icons/pi';
 
 import { cn } from '@/lib/utils';
@@ -120,6 +121,10 @@ export const TrashIcon = ({ className }: IconProps) => (
 
 export const UploadIcon = ({ className }: IconProps) => (
   <PiUploadSimple className={cn('h-5 w-5', className)} />
+);
+
+export const QrCodeIcon = ({ className }: IconProps) => (
+  <PiQrCode className={cn('h-5 w-5', className)} />
 );
 
 export const DownloadIcon = ({ className }: IconProps) => (

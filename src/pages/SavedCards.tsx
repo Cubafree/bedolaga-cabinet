@@ -2,8 +2,6 @@ import { uiLocale } from '@/utils/uiLocale';
 import { useState } from 'react';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
-import { motion } from 'framer-motion';
 
 import { balanceApi } from '../api/balance';
 import { subscriptionApi } from '../api/subscription';
@@ -11,21 +9,10 @@ import { useToast } from '../components/Toast';
 import { useDestructiveConfirm } from '../platform/hooks/useNativeDialog';
 import type { SbpRecurringInfo, SubscriptionListItem } from '../types';
 
-import { Card } from '@/components/data-display/Card';
-import { Button } from '@/components/primitives/Button';
-import { BackIcon } from '@/components/icons';
-import { staggerContainer, staggerItem } from '@/components/motion/transitions';
+import { Kicker } from '@/components/ui/Kicker';
+import { WebBackButton } from '../components/WebBackButton';
+import { CreditCardIcon, TrashIcon } from '@/components/icons';
 import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
-
-function formatCardDate(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString(uiLocale());
-  } catch {
-    return dateStr;
-  }
-}
 
 /** Human-readable locale key for an SBP binding status (mirrors Subscription.tsx). */
 function sbpStatusLabelKey(status: string): string | null {
@@ -48,7 +35,6 @@ interface SbpBinding {
 
 export default function SavedCards() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const confirmDelete = useDestructiveConfirm();
@@ -68,8 +54,9 @@ export default function SavedCards() {
   const handleDeleteCard = async (cardId: number) => {
     if (deletingCardId !== null) return;
     const confirmed = await confirmDelete(
-      t('balance.savedCards.confirmUnlink'),
-      t('balance.savedCards.unlink'),
+      t('balance.details.cardRemoveConfirmText'),
+      t('balance.details.cardRemove'),
+      t('balance.details.cardRemoveConfirmTitle'),
     );
     if (!confirmed) return;
     setDeletingCardId(cardId);
@@ -95,20 +82,15 @@ export default function SavedCards() {
     }
   };
 
-  // ── SBP (Platega) recurring bindings ────────────────────────────────
-  // Same query-key convention as the Subscription page (['sbp-recurring', subId])
-  // so the caches are shared and don't refetch redundantly when navigating
-  // between the two pages.
+  // ── SBP recurring bindings (upstream feature, restyled) ──────────────
+  // Same query keys as the Subscription page (['sbp-recurring', subId]) so the
+  // caches are shared. The first subscription acts as a probe: a disabled
+  // feature answers 403, and we don't want one failing request per subscription.
   const { data: subscriptionsData } = useQuery({
     queryKey: ['subscriptions-list'],
     queryFn: subscriptionApi.getSubscriptions,
   });
   const nonTrialSubs = (subscriptionsData?.subscriptions ?? []).filter((sub) => !sub.is_trial);
-
-  // Опций покупки здесь нет, поэтому фичу проверяем пробой: спрашиваем первую
-  // подписку, а остальные — только если ответ пришёл. Выключенная автооплата
-  // отвечает 403, и без пробы браузер печатал бы красную строку с полным стеком
-  // на КАЖДУЮ подписку человека.
   const probeSub = nonTrialSubs[0];
   const probeQuery = useQuery({
     queryKey: ['sbp-recurring', probeSub?.id],
@@ -125,14 +107,9 @@ export default function SavedCards() {
     })),
   });
   const sbpQueries = [probeQuery, ...restQueries];
-
-  // No section at all when nothing is bound: either the feature is off
-  // (every query 403s) or none of the subscriptions has an active binding.
   const sbpBindings: SbpBinding[] = nonTrialSubs.reduce<SbpBinding[]>((acc, sub, index) => {
     const info = sbpQueries[index]?.data;
-    if (info && info.status !== 'none') {
-      acc.push({ sub, info });
-    }
+    if (info && info.status !== 'none') acc.push({ sub, info });
     return acc;
   }, []);
 
@@ -158,186 +135,140 @@ export default function SavedCards() {
       });
     } catch (error) {
       console.error('Failed to unlink SBP binding:', error);
-      showToast({
-        type: 'error',
-        title: t('common.error'),
-        message: '',
-        duration: 3000,
-      });
+      showToast({ type: 'error', title: t('common.error'), message: '', duration: 3000 });
     } finally {
       setUnlinkingSubId(null);
     }
   };
 
   return (
-    // key: remount the container when loading resolves — stagger orchestration
-    // runs once on mount, so cards arriving from the API later would otherwise
-    // stay stuck at their initial variant (opacity 0) after a hard refresh
-    <motion.div
-      key={isLoading ? 'loading' : 'ready'}
-      className="space-y-6"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <motion.div variants={staggerItem} className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/balance')}
-          className="flex h-10 w-10 items-center justify-center rounded-linear border border-dark-700/30 bg-dark-800/50 text-dark-300 transition-colors hover:bg-dark-700/50 hover:text-dark-100"
-        >
-          <BackIcon className="h-5 w-5" />
-        </button>
-        <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-          {t('balance.savedCards.pageTitle')}
-        </h1>
-      </motion.div>
+      <div className="flex items-center gap-3">
+        <WebBackButton to="/balance" />
+        <div>
+          <Kicker className="mb-1">{t('balance.title')}</Kicker>
+          <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50">
+            {t('balance.details.cardsTitle')}
+          </h1>
+        </div>
+      </div>
 
-      {/* Loading state */}
+      <p className="text-[13px] text-champagne-600 dark:text-dark-400">
+        {t('balance.details.cardsSubtitle')}
+      </p>
+
+      {/* Loading */}
       {isLoading && (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <SkeletonGroup className="space-y-3">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-linear border border-dark-700/30 bg-dark-800/30 p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-6 w-6 shrink-0" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-8 w-20 shrink-0" />
-                </div>
-              ))}
-            </SkeletonGroup>
-          </Card>
-        </motion.div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={2} className="h-20 w-full rounded-bento" />
+        </SkeletonGroup>
       )}
 
-      {/* Error state */}
+      {/* Error */}
       {isError && (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="py-12 text-center">
-              <div className="text-error-400">{t('balance.savedCards.loadError')}</div>
-            </div>
-          </Card>
-        </motion.div>
+        <div className="rounded-bento border border-error-500/30 bg-error-500/10 p-6 text-center text-sm text-error-500">
+          {t('balance.savedCards.loadError')}
+        </div>
       )}
 
-      {/* Cards List */}
-      {!isLoading && !isError && savedCards && savedCards.length > 0 ? (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="space-y-3">
-              {savedCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-center justify-between gap-3 rounded-linear border border-dark-700/30 bg-dark-800/30 p-4"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="shrink-0 text-xl">💳</span>
-                    <div className="min-w-0">
-                      <div className="font-medium text-dark-100 [overflow-wrap:anywhere]">
-                        {card.title ||
-                          `${card.card_type || t('balance.savedCards.card')} ${card.card_last4 ? `*${card.card_last4}` : ''}`}
-                      </div>
-                      <div className="text-xs text-dark-500">
-                        {t('balance.savedCards.linkedAt', {
-                          date: formatCardDate(card.created_at),
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleDeleteCard(card.id)}
-                    loading={deletingCardId === card.id}
-                    className="shrink-0 text-error-400 hover:text-error-300"
-                  >
-                    {t('balance.savedCards.unlink')}
-                  </Button>
+      {/* Cards */}
+      {!isLoading && !isError && savedCards && savedCards.length > 0 && (
+        <div className="space-y-3">
+          {savedCards.map((card) => (
+            <div
+              key={card.id}
+              className="flex items-center justify-between gap-3 rounded-bento border border-champagne-300 bg-champagne-50 p-5 dark:border-dark-700/40 dark:bg-dark-900/60"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-500/12 text-accent-600">
+                  <CreditCardIcon className="h-5 w-5" />
+                </span>
+                <div className="font-medium text-champagne-900 dark:text-dark-50">
+                  {card.card_last4
+                    ? t('balance.details.cardItem', { last4: card.card_last4 })
+                    : card.title || t('balance.savedCards.card')}
                 </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      ) : !isLoading && !isError && savedCards ? (
-        /* Empty state - only show when data loaded and empty */
-        <motion.div variants={staggerItem}>
-          <Card>
-            <div className="py-12 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-linear-lg bg-dark-800">
-                <span className="text-3xl">💳</span>
               </div>
-              <div className="text-dark-400">{t('balance.savedCards.empty')}</div>
+              <button
+                onClick={() => handleDeleteCard(card.id)}
+                disabled={deletingCardId === card.id}
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-error-500 transition-colors hover:bg-error-500/10 disabled:opacity-50"
+              >
+                {deletingCardId === card.id ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-error-500/40 border-t-error-500" />
+                ) : (
+                  <TrashIcon className="h-4 w-4" />
+                )}
+                {t('balance.details.cardRemove')}
+              </button>
             </div>
-          </Card>
-        </motion.div>
-      ) : null}
-
-      {/* SBP (Platega) recurring bindings — convenience mirror of the
-          per-subscription block on the Subscription page. Rendered only
-          when at least one non-trial subscription has an active binding;
-          hidden entirely when the feature is off or nothing is bound. */}
-      {sbpBindings.length > 0 && (
-        <motion.div variants={staggerItem}>
-          <Card>
-            <h2 className="mb-3 text-sm font-semibold text-dark-100">
-              {t('balance.savedCards.sbpSection')}
-            </h2>
-            <div className="space-y-3">
-              {sbpBindings.map(({ sub, info }) => {
-                const statusKey = sbpStatusLabelKey(info.status);
-                return (
-                  <div
-                    key={sub.id}
-                    // Кнопка с длинной подписью на телефоне — под текстом: рядом
-                    // она сжималась в три строки и вываливалась из своей рамки.
-                    className="flex flex-col gap-3 rounded-linear border border-dark-700/30 bg-dark-800/30 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="shrink-0 text-xl">🔁</span>
-                      <div className="min-w-0">
-                        <div className="font-medium text-dark-100">
-                          {sub.tariff_name || `#${sub.id}`}
-                        </div>
-                        <div className="text-xs text-dark-500">
-                          {t('balance.savedCards.sbpBinding')}
-                          {statusKey ? ` · ${t(statusKey)}` : ''}
-                          {info.next_charge_at
-                            ? ` · ${t('subscription.sbpRecurring.nextCharge', {
-                                date: new Date(info.next_charge_at).toLocaleDateString(uiLocale(), {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric',
-                                }),
-                              })}`
-                            : ''}
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleUnlinkSbp(sub.id)}
-                      loading={unlinkingSubId === sub.id}
-                      className="shrink-0 self-start whitespace-nowrap text-error-400 hover:text-error-300 sm:self-auto"
-                    >
-                      {t('balance.savedCards.sbpUnlink')}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </motion.div>
+          ))}
+        </div>
       )}
-    </motion.div>
+
+      {/* Empty */}
+      {!isLoading && !isError && savedCards && savedCards.length === 0 && (
+        <div className="rounded-bento border border-champagne-300 bg-champagne-50 p-10 text-center dark:border-dark-700/40 dark:bg-dark-900/60">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-champagne-100 dark:bg-dark-800">
+            <CreditCardIcon className="h-7 w-7 text-champagne-400" />
+          </div>
+          <div className="text-champagne-600 dark:text-dark-400">
+            {t('balance.details.cardsEmpty')}
+          </div>
+        </div>
+      )}
+
+      {/* Security note */}
+      {!isLoading && !isError && savedCards && savedCards.length > 0 && (
+        <p className="text-center text-[12px] text-champagne-500 dark:text-dark-400">
+          {t('balance.details.cardsSecurity')}
+        </p>
+      )}
+
+      {/* SBP recurring bindings — shown only when at least one exists */}
+      {sbpBindings.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-display text-base font-bold text-champagne-900 dark:text-dark-50">
+            {t('balance.savedCards.sbpSection')}
+          </h2>
+          {sbpBindings.map(({ sub, info }) => {
+            const statusKey = sbpStatusLabelKey(info.status);
+            return (
+              <div
+                key={sub.id}
+                className="flex flex-col gap-3 rounded-bento border border-champagne-300 bg-champagne-50 p-5 dark:border-dark-700/40 dark:bg-dark-900/60 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium text-champagne-900 dark:text-dark-50">
+                    {sub.tariff_name || `#${sub.id}`}
+                  </div>
+                  <div className="text-xs text-champagne-600 dark:text-dark-400">
+                    {t('balance.savedCards.sbpBinding')}
+                    {statusKey ? ` · ${t(statusKey)}` : ''}
+                    {info.next_charge_at
+                      ? ` · ${t('subscription.sbpRecurring.nextCharge', {
+                          date: new Date(info.next_charge_at).toLocaleDateString(uiLocale(), {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          }),
+                        })}`
+                      : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleUnlinkSbp(sub.id)}
+                  disabled={unlinkingSubId === sub.id}
+                  className="flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium text-error-500 transition-colors hover:bg-error-500/10 disabled:opacity-50 sm:self-auto"
+                >
+                  {t('balance.savedCards.sbpUnlink')}
+                </button>
+              </div>
+            );
+          })}
+        </section>
+      )}
+    </div>
   );
 }

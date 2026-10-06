@@ -121,7 +121,7 @@ export default {
         // so it never affects any other glyph). Global root fix for flags everywhere.
         sans: [
           'Twemoji Country Flags',
-          'Manrope',
+          'Onest',
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -129,12 +129,14 @@ export default {
           'Roboto',
           'sans-serif',
         ],
-        display: ['Twemoji Country Flags', 'Outfit', 'Manrope', 'system-ui', 'sans-serif'],
-        mono: ['Twemoji Country Flags', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
+        display: ['Twemoji Country Flags', 'Unbounded', 'Onest', 'system-ui', 'sans-serif'],
+        mono: ['Twemoji Country Flags', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         bento: '24px',
         '4xl': '32px',
+        // Input radius (landing parity, 12–14px range) — DESIGN_SYSTEM.md.
+        input: '12px',
         // Linear design tokens
         linear: '8px',
         'linear-lg': '12px',
@@ -160,6 +162,11 @@ export default {
         'glow-lg': '0 0 40px rgba(var(--color-accent-500), 0.2)',
         soft: '0 2px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2)',
         card: '0 4px 24px -4px rgba(0, 0, 0, 0.4)',
+        // RocketJump brand recipes (landing parity) — see DESIGN_SYSTEM.md.
+        // Stacked CTA: solid #B23A0E ledge (accent-700) + soft orange ambient glow.
+        'cta-stacked': '0 6px 0 0 #B23A0E, 0 12px 24px -8px rgba(255, 90, 31, 0.5)',
+        // Flat offset "speech-bubble" — uses the ink token so it flips with theme.
+        'flat-offset': '4px 4px 0 0 rgb(var(--color-dark-900))',
         // Linear design tokens
         'linear-sm': '0 1px 2px rgba(0, 0, 0, 0.05)',
         linear: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
