@@ -9,7 +9,6 @@ import {
   preloadLogo,
   isLogoPreloaded,
 } from '@/api/branding';
-import { setFavicon, letterFaviconDataUri, roundedFaviconDataUri } from '@/utils/favicon';
 
 // Brand default when VITE_APP_NAME is unset — the RocketJump brand, never the
 // generic word "Cabinet" (A2). appName still comes from the branding endpoint.
@@ -41,26 +40,7 @@ export function useBranding() {
   const hasCustomLogo = branding?.has_custom_logo || false;
   const logoUrl = branding ? brandingApi.getLogoUrl(branding) : null;
 
-  // Set document title
-  useEffect(() => {
-    document.title = appName || 'VPN';
-  }, [appName]);
-
-  // Update favicon — custom logo (rounded like the header tile) when available,
-  // else a brand-letter monogram so the tab always carries an icon.
-  useEffect(() => {
-    if (!logoUrl) {
-      setFavicon(letterFaviconDataUri(logoLetter));
-      return;
-    }
-    let cancelled = false;
-    roundedFaviconDataUri(logoUrl).then((rounded) => {
-      if (!cancelled) setFavicon(rounded || logoUrl);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [logoUrl, logoLetter]);
+  // Заголовок, фавикон и метатеги ведёт useDocumentBranding на уровне приложения.
 
   // Fullscreen setting from server
   const { data: fullscreenSetting } = useQuery({

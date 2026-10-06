@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { themeColorsApi } from '../../api/themeColors';
-import { DEFAULT_THEME_COLORS, ThemeColors } from '../../types/theme';
+import { DEFAULT_THEME_COLORS, type ThemeColors } from '../../types/theme';
 import { ColorPicker } from '../ColorPicker';
 import { applyThemeColors } from '../../hooks/useThemeColors';
 import { updateEnabledThemesCache } from '../../hooks/useTheme';
@@ -79,11 +79,13 @@ export function ThemeTab() {
         warning: serverColors.warning,
         error: serverColors.error,
       };
-      // Only sync if saved snapshot matches current draft (no unsaved changes)
-      if (
-        colorsEqual(savedColorsRef.current, draftColorsRef.current) ||
-        colorsEqual(savedColorsRef.current, DEFAULT_THEME_COLORS)
-      ) {
+      // Подхватываем данные из кэша только пока черновик совпадает с сохранённым
+      // снимком. Черновик сам уходит в этот кэш для живого превью (updateDraftColor,
+      // с задержкой 150 мс) и возвращается сюда эхом; при несохранённых правках его
+      // нельзя принимать за серверное состояние — иначе они выглядят сохранёнными,
+      // кнопка «Сохранить» исчезает, PATCH не уходит. Ветка «сохранённое == дефолты»
+      // пропускала это эхо у каждой свежей инсталляции и после «Сбросить все цвета».
+      if (colorsEqual(savedColorsRef.current, draftColorsRef.current)) {
         setDraftColors(colors);
         savedColorsRef.current = colors;
       }
@@ -428,7 +430,7 @@ export function ThemeTab() {
           <button
             onClick={() => updateColorsMutation.mutate(draftColors)}
             disabled={updateColorsMutation.isPending}
-            className="rounded-xl bg-accent-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
+            className="rounded-xl bg-accent-500 px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-600 disabled:opacity-50"
           >
             {updateColorsMutation.isPending
               ? t('common.saving', t('common.save'))

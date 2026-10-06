@@ -95,7 +95,10 @@ export default function StatusCard({
     ? t('home.meta.trafficUnlimited')
     : t('home.meta.trafficLeft', {
         amount: formatTraffic(
-          Math.max(0, subscription ? subscription.traffic_limit_gb - subscription.traffic_used_gb : 0),
+          Math.max(
+            0,
+            subscription ? subscription.traffic_limit_gb - subscription.traffic_used_gb : 0,
+          ),
         ),
         total: formatTraffic(subscription?.traffic_limit_gb ?? 0),
       });
@@ -149,9 +152,7 @@ export default function StatusCard({
             leadingIcon={<RefreshIcon className="h-5 w-5" />}
             loading={renewing}
             onClick={() =>
-              onRenew
-                ? onRenew()
-                : navigate(`/subscription/${subscription?.id}/renew`)
+              onRenew ? onRenew() : navigate(`/subscription/${subscription?.id}/renew`)
             }
           >
             {t('home.status.expiring.button')}
@@ -173,7 +174,9 @@ export default function StatusCard({
                 onRenew();
                 return;
               }
-              navigate(subscription ? `/subscription/${subscription.id}/renew` : '/subscription/buy');
+              navigate(
+                subscription ? `/subscription/${subscription.id}/renew` : '/subscription/buy',
+              );
             }}
           >
             {t('home.status.expired.button')}

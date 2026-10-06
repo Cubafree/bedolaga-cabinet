@@ -1,3 +1,4 @@
+import { safeSession } from './utils/safeStorage';
 import { lazy, Suspense, type ComponentType } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router';
 import { useAuthStore } from './store/auth';
@@ -10,9 +11,12 @@ function lazyWithRetry<T extends ComponentType<unknown>>(factory: () => Promise<
   return lazy(() =>
     factory().catch(() => {
       const key = 'chunk_reload_ts';
-      const last = Number(sessionStorage.getItem(key) || '0');
-      if (Date.now() - last > 30_000) {
-        sessionStorage.setItem(key, String(Date.now()));
+      const last = Number(safeSession.getItem(key) || '0');
+      // Метка обязана пережить сам reload — в этом её единственный смысл. Если
+      // сохранить её негде, перезагрузка станет бесконечной: после reload метки
+      // не окажется, и условие снова выполнится. Лучше отдать ошибку в
+      // ErrorBoundary, чем крутить страницу по кругу.
+      if (Date.now() - last > 30_000 && safeSession.setItem(key, String(Date.now()))) {
         window.location.reload();
       }
       // Re-throw so ErrorBoundary catches it if reload guard prevents loop
@@ -31,10 +35,14 @@ import {
   ServiceUnavailableScreen,
 } from './components/blocking';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { BackgroundHost } from './components/backgrounds/BackgroundHost';
 import { PermissionRoute } from '@/components/auth/PermissionRoute';
+import { RemountOnParam } from '@/components/RemountOnParam';
 import { saveReturnUrl } from './utils/token';
+import { ScreenViewReporter } from './components/ScreenViewReporter';
 import { useAnalyticsCounters } from './hooks/useAnalyticsCounters';
 import { useSiteVerification } from './hooks/useSiteVerification';
+import { useDoneKey } from './hooks/useDoneKey';
 // Auth pages - load immediately (small)
 import Login from './pages/Login';
 import TelegramCallback from './pages/TelegramCallback';
@@ -42,11 +50,13 @@ import TelegramRedirect from './pages/TelegramRedirect';
 import DeepLinkRedirect from './pages/DeepLinkRedirect';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
+import PublicLegal from './pages/PublicLegal';
 import OAuthCallback from './pages/OAuthCallback';
 import ConnectRoute from './pages/ConnectRoute';
 
-// Dashboard - load eagerly (default route, LCP-critical)
-import Dashboard from './pages/Dashboard';
+// Dashboard - load eagerly (default route, LCP-critical).
+// HomeScreen выбирает между полным и простым видом по настройке оператора.
+import HomeScreen from './pages/HomeScreen';
 
 // User pages - lazy load
 const Subscriptions = lazyWithRetry(() => import('./pages/Subscriptions'));
@@ -87,6 +97,7 @@ const AdminPanel = lazyWithRetry(() => import('./pages/AdminPanel'));
 const AdminTickets = lazyWithRetry(() => import('./pages/AdminTickets'));
 const AdminTicketSettings = lazyWithRetry(() => import('./pages/AdminTicketSettings'));
 const AdminSettings = lazyWithRetry(() => import('./pages/AdminSettings'));
+const AdminGraceAccess = lazyWithRetry(() => import('./pages/AdminGraceAccess'));
 const AdminApps = lazyWithRetry(() => import('./pages/AdminApps'));
 const AdminWheel = lazyWithRetry(() => import('./pages/AdminWheel'));
 const AdminTariffs = lazyWithRetry(() => import('./pages/AdminTariffs'));
@@ -99,6 +110,10 @@ const AdminBroadcasts = lazyWithRetry(() => import('./pages/AdminBroadcasts'));
 const AdminBroadcastCreate = lazyWithRetry(() => import('./pages/AdminBroadcastCreate'));
 const AdminPromocodes = lazyWithRetry(() => import('./pages/AdminPromocodes'));
 const AdminPromocodeCreate = lazyWithRetry(() => import('./pages/AdminPromocodeCreate'));
+const AdminCoupons = lazyWithRetry(() => import('./pages/AdminCoupons'));
+const AdminCouponCreate = lazyWithRetry(() => import('./pages/AdminCouponCreate'));
+const AdminCouponDetail = lazyWithRetry(() => import('./pages/AdminCouponDetail'));
+const CouponStatus = lazyWithRetry(() => import('./pages/CouponStatus'));
 const AdminPromocodeStats = lazyWithRetry(() => import('./pages/AdminPromocodeStats'));
 const AdminPromoGroups = lazyWithRetry(() => import('./pages/AdminPromoGroups'));
 const AdminPromoGroupCreate = lazyWithRetry(() => import('./pages/AdminPromoGroupCreate'));
@@ -108,6 +123,7 @@ const AdminCampaignStats = lazyWithRetry(() => import('./pages/AdminCampaignStat
 const AdminCampaignEdit = lazyWithRetry(() => import('./pages/AdminCampaignEdit'));
 const AdminPartners = lazyWithRetry(() => import('./pages/AdminPartners'));
 const AdminPartnerSettings = lazyWithRetry(() => import('./pages/AdminPartnerSettings'));
+const AdminReferralLevels = lazyWithRetry(() => import('./pages/AdminReferralLevels'));
 const AdminPartnerDetail = lazyWithRetry(() => import('./pages/AdminPartnerDetail'));
 const AdminApplicationReview = lazyWithRetry(() => import('./pages/AdminApplicationReview'));
 const AdminPartnerCommission = lazyWithRetry(() => import('./pages/AdminPartnerCommission'));
@@ -129,6 +145,10 @@ const AdminPromoOfferTemplateEdit = lazyWithRetry(
   () => import('./pages/AdminPromoOfferTemplateEdit'),
 );
 const AdminPromoOfferSend = lazyWithRetry(() => import('./pages/AdminPromoOfferSend'));
+const AdminReachability = lazyWithRetry(() => import('./pages/AdminReachability'));
+const AdminReachabilityHistory = lazyWithRetry(() => import('./pages/AdminReachabilityHistory'));
+const AdminReachabilityOther = lazyWithRetry(() => import('./pages/AdminReachabilityOther'));
+const AdminDpiChecker = lazyWithRetry(() => import('./pages/AdminDpiChecker'));
 const AdminRemnawave = lazyWithRetry(() => import('./pages/AdminRemnawave'));
 const AdminRemnawaveSquadDetail = lazyWithRetry(() => import('./pages/AdminRemnawaveSquadDetail'));
 const AdminEmailTemplates = lazyWithRetry(() => import('./pages/AdminEmailTemplates'));
@@ -140,14 +160,16 @@ const AdminUserDetail = lazyWithRetry(() => import('./pages/AdminUserDetail'));
 const AdminBroadcastDetail = lazyWithRetry(() => import('./pages/AdminBroadcastDetail'));
 const AdminPinnedMessages = lazyWithRetry(() => import('./pages/AdminPinnedMessages'));
 const AdminPinnedMessageCreate = lazyWithRetry(() => import('./pages/AdminPinnedMessageCreate'));
+const AdminReminders = lazyWithRetry(() => import('./pages/AdminReminders'));
+const AdminReminderEdit = lazyWithRetry(() => import('./pages/AdminReminderEdit'));
 const AdminChannelSubscriptions = lazyWithRetry(() => import('./pages/AdminChannelSubscriptions'));
-const AdminEmailTemplatePreview = lazyWithRetry(() => import('./pages/AdminEmailTemplatePreview'));
 const AdminRoles = lazyWithRetry(() => import('./pages/AdminRoles'));
 const AdminRoleEdit = lazyWithRetry(() => import('./pages/AdminRoleEdit'));
 const AdminRoleAssign = lazyWithRetry(() => import('./pages/AdminRoleAssign'));
 const AdminPolicies = lazyWithRetry(() => import('./pages/AdminPolicies'));
 const AdminPolicyEdit = lazyWithRetry(() => import('./pages/AdminPolicyEdit'));
 const AdminAuditLog = lazyWithRetry(() => import('./pages/AdminAuditLog'));
+const AdminSystemErrors = lazyWithRetry(() => import('./pages/AdminSystemErrors'));
 const AdminLandings = lazyWithRetry(() => import('./pages/AdminLandings'));
 const AdminLandingEditor = lazyWithRetry(() => import('./pages/AdminLandingEditor'));
 const AdminLandingStats = lazyWithRetry(() => import('./pages/AdminLandingStats'));
@@ -162,6 +184,7 @@ const AdminNewsCreate = lazyWithRetry(() => import('./pages/AdminNewsCreate'));
 const InfoPageView = lazyWithRetry(() => import('./pages/InfoPageView'));
 const AdminInfoPages = lazyWithRetry(() => import('./pages/AdminInfoPages'));
 const AdminInfoPageEditor = lazyWithRetry(() => import('./pages/AdminInfoPageEditor'));
+const AdminLegalPages = lazyWithRetry(() => import('./pages/AdminLegalPages'));
 
 function ProtectedRoute({
   children,
@@ -183,7 +206,18 @@ function ProtectedRoute({
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  return withLayout ? <Layout>{children}</Layout> : <>{children}</>;
+  // След пользователя: каждый открытый экран уходит в «Активность» его карточки.
+  return withLayout ? (
+    <Layout>
+      <ScreenViewReporter />
+      {children}
+    </Layout>
+  ) : (
+    <>
+      <ScreenViewReporter />
+      {children}
+    </>
+  );
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -289,9 +323,13 @@ function App() {
   // Pulls site-verification tokens (Antilopay apay-tag etc.) from the bot
   // backend and injects matching <meta> tags into document.head.
   useSiteVerification();
+  // Клавиша «Готово» на экранной клавиатуре для всех полей, включая экран входа.
+  useDoneKey();
 
   return (
     <>
+      {/* Живёт над <Routes>: анимация фона не перезапускается при навигации */}
+      <BackgroundHost />
       <BlockingOverlay />
       <Routes>
         {/* Public routes */}
@@ -306,6 +344,9 @@ function App() {
         <Route path="/auth/oauth/callback" element={<OAuthCallback />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/offer" element={<PublicLegal doc="offer" />} />
+        <Route path="/privacy" element={<PublicLegal doc="privacy" />} />
+        <Route path="/recurrent-payments" element={<PublicLegal doc="recurrent" />} />
         <Route
           path="/merge/:mergeToken"
           element={
@@ -327,6 +368,14 @@ function App() {
           element={
             <LazyPage>
               <GiftClaim />
+            </LazyPage>
+          }
+        />
+        <Route
+          path="/coupon/:token"
+          element={
+            <LazyPage>
+              <CouponStatus />
             </LazyPage>
           }
         />
@@ -353,7 +402,7 @@ function App() {
           element={
             <ProtectedRoute>
               <LazyPage>
-                <Dashboard />
+                <HomeScreen />
               </LazyPage>
             </ProtectedRoute>
           }
@@ -447,7 +496,10 @@ function App() {
         {/* Retired: renew is now the consolidated /subscription/buy screen. */}
         <Route path="/subscription/:subscriptionId/renew" element={<RenewToBuyRedirect />} />
         {/* Legacy redirect: old /subscription/purchase → new /subscription/buy. */}
-        <Route path="/subscription/purchase" element={<Navigate to="/subscription/buy" replace />} />
+        <Route
+          path="/subscription/purchase"
+          element={<Navigate to="/subscription/buy" replace />}
+        />
         {/* Detail: keep redirecting to the existing /subscriptions/:id screen. */}
         <Route path="/subscription/:subscriptionId" element={<LegacySubscriptionRedirect />} />
         <Route
@@ -482,6 +534,18 @@ function App() {
         />
         <Route
           path="/balance/top-up/result"
+          element={
+            <ProtectedRoute withLayout={false}>
+              <LazyPage>
+                <TopUpResult />
+              </LazyPage>
+            </ProtectedRoute>
+          }
+        />
+        {/* Path-based method variant: some providers (Lava) reject return URLs that carry a
+            query string, so the method is encoded in the path instead of ?method=. */}
+        <Route
+          path="/balance/top-up/result/:method"
           element={
             <ProtectedRoute withLayout={false}>
               <LazyPage>
@@ -698,12 +762,35 @@ function App() {
             </PermissionRoute>
           }
         />
+        {/* Deep-link target for admin ticket notification buttons (bot issue #2988):
+            opens a specific ticket directly. Static "/settings" above out-ranks
+            this dynamic segment in react-router, so there is no conflict. */}
+        <Route
+          path="/admin/tickets/:ticketId"
+          element={
+            <PermissionRoute permission="tickets:read">
+              <LazyPage>
+                <AdminTickets />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
         <Route
           path="/admin/settings"
           element={
             <PermissionRoute permission="settings:read">
               <LazyPage>
                 <AdminSettings />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/grace-access"
+          element={
+            <PermissionRoute permission="settings:read">
+              <LazyPage>
+                <AdminGraceAccess />
               </LazyPage>
             </PermissionRoute>
           }
@@ -839,6 +926,46 @@ function App() {
           }
         />
         <Route
+          path="/admin/dpichecker"
+          element={
+            <PermissionRoute permission="dpichecker:read">
+              <LazyPage>
+                <AdminDpiChecker />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/reachability"
+          element={
+            <PermissionRoute permission="reachability:read">
+              <LazyPage>
+                <AdminReachability />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/reachability/history"
+          element={
+            <PermissionRoute permission="reachability:read">
+              <LazyPage>
+                <AdminReachabilityHistory />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/reachability/other"
+          element={
+            <PermissionRoute permission="reachability:read">
+              <LazyPage>
+                <AdminReachabilityOther />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="/admin/broadcasts"
           element={
             <PermissionRoute permission="broadcasts:read">
@@ -884,6 +1011,36 @@ function App() {
             <PermissionRoute permission="promocodes:read">
               <LazyPage>
                 <AdminPromocodeCreate />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/coupons"
+          element={
+            <PermissionRoute permission="coupons:read">
+              <LazyPage>
+                <AdminCoupons />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/coupons/create"
+          element={
+            <PermissionRoute permission="coupons:create">
+              <LazyPage>
+                <AdminCouponCreate />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/coupons/:id"
+          element={
+            <PermissionRoute permission="coupons:read">
+              <LazyPage>
+                <AdminCouponDetail />
               </LazyPage>
             </PermissionRoute>
           }
@@ -989,6 +1146,19 @@ function App() {
           }
         />
         <Route
+          path="/admin/partners/referral-levels"
+          element={
+            /* Право совпадает с тем, что требуют сами эндпоинты уровней:
+               с одним partners:read страница открывалась и падала в общую
+               ошибку загрузки, не сообщая, что дело в правах. */
+            <PermissionRoute permission="partners:settings">
+              <LazyPage>
+                <AdminReferralLevels />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="/admin/partners/applications/:id/review"
           element={
             <PermissionRoute permission="partners:read">
@@ -1033,7 +1203,9 @@ function App() {
           element={
             <PermissionRoute permission="partners:read">
               <LazyPage>
-                <AdminPartnerDetail />
+                <RemountOnParam name="userId">
+                  <AdminPartnerDetail />
+                </RemountOnParam>
               </LazyPage>
             </PermissionRoute>
           }
@@ -1223,7 +1395,9 @@ function App() {
           element={
             <PermissionRoute permission="users:read">
               <LazyPage>
-                <AdminUserDetail />
+                <RemountOnParam name="id">
+                  <AdminUserDetail />
+                </RemountOnParam>
               </LazyPage>
             </PermissionRoute>
           }
@@ -1269,6 +1443,36 @@ function App() {
           }
         />
         <Route
+          path="/admin/reminders"
+          element={
+            <PermissionRoute permission="user_reminders:read">
+              <LazyPage>
+                <AdminReminders />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/reminders/create"
+          element={
+            <PermissionRoute permission="user_reminders:create">
+              <LazyPage>
+                <AdminReminderEdit />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/reminders/:id/edit"
+          element={
+            <PermissionRoute permission="user_reminders:edit">
+              <LazyPage>
+                <AdminReminderEdit />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+        <Route
           path="/admin/channel-subscriptions"
           element={
             <PermissionRoute permission="channels:read">
@@ -1278,17 +1482,6 @@ function App() {
             </PermissionRoute>
           }
         />
-        <Route
-          path="/admin/email-templates/preview/:type/:lang"
-          element={
-            <PermissionRoute permission="email_templates:read">
-              <LazyPage>
-                <AdminEmailTemplatePreview />
-              </LazyPage>
-            </PermissionRoute>
-          }
-        />
-
         {/* RBAC routes */}
         <Route
           path="/admin/roles"
@@ -1423,6 +1616,16 @@ function App() {
             </PermissionRoute>
           }
         />
+        <Route
+          path="/admin/legal-pages"
+          element={
+            <PermissionRoute permission="info_pages:read">
+              <LazyPage>
+                <AdminLegalPages />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
 
         <Route
           path="/admin/audit-log"
@@ -1430,6 +1633,17 @@ function App() {
             <PermissionRoute permission="audit_log:read">
               <LazyPage>
                 <AdminAuditLog />
+              </LazyPage>
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="/admin/system-errors"
+          element={
+            <PermissionRoute permission="system_errors:read">
+              <LazyPage>
+                <AdminSystemErrors />
               </LazyPage>
             </PermissionRoute>
           }

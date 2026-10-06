@@ -16,6 +16,8 @@ import { Kicker } from '@/components/ui/Kicker';
 import { PillButton } from '@/components/ui/PillButton';
 import { ArrowRightIcon, GiftIcon } from '@/components/icons';
 import { API } from '../config/constants';
+import { getApiErrorMessage } from '../utils/api-error';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 // Yellow светофор threshold — show "expiring" at or below this many days (hi-fi §2.2).
 const EXPIRING_THRESHOLD_DAYS = 5;
@@ -90,8 +92,8 @@ export default function Dashboard() {
       // After the trial flips us green, nudge the user toward connecting.
       navigate('/connect');
     },
-    onError: (error: { response?: { data?: { detail?: string } } }) => {
-      setTrialError(error.response?.data?.detail || t('common.error'));
+    onError: (error: unknown) => {
+      setTrialError(getApiErrorMessage(error, t('common.error')));
     },
   });
 
@@ -208,14 +210,14 @@ export default function Dashboard() {
           </PillButton>
         </div>
       ) : showSkeleton || trialPending ? (
-        <div className="rounded-4xl border border-champagne-300 bg-champagne-50 p-7 dark:border-dark-700/40 dark:bg-dark-900/60">
+        <SkeletonGroup className="rounded-4xl border border-champagne-300 bg-champagne-50 p-7 dark:border-dark-700/40 dark:bg-dark-900/60">
           <div className="mb-5 flex items-center justify-between">
-            <div className="skeleton h-6 w-32 rounded-lg" />
-            <div className="skeleton h-10 w-16 rounded-lg" />
+            <Skeleton className="h-6 w-32 rounded-lg" />
+            <Skeleton className="h-10 w-16 rounded-lg" />
           </div>
-          <div className="skeleton mb-6 h-4 w-48 rounded" />
-          <div className="skeleton h-14 w-full rounded-full" />
-        </div>
+          <Skeleton className="mb-6 h-4 w-48 rounded" />
+          <Skeleton className="h-14 w-full rounded-full" />
+        </SkeletonGroup>
       ) : (
         <div data-onboarding="status-card">
           <StatusCard
@@ -240,7 +242,7 @@ export default function Dashboard() {
         <span className="font-mono text-[11px] uppercase tracking-wider text-champagne-600 dark:text-dark-400">
           {t('home.balance.label')}{' '}
           <span className="font-sans font-semibold normal-case tracking-normal text-champagne-900 dark:text-dark-50">
-            {(balanceData?.balance_rubles ?? 0).toLocaleString('ru-RU')} ₽
+            {(balanceData?.balance_rubles ?? 0).toLocaleString('ru-RU')} ₽
           </span>
         </span>
         <Link

@@ -4,12 +4,14 @@ import { motion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
 import { usePlatform } from '@/platform';
+import { HIDDEN_UNDER_KEYBOARD, useVirtualKeyboard } from '@/hooks/useVirtualKeyboard';
 
 // Icons — fixed 5-tab spine (P0 connect slice, hi-fi §1.1).
 import { HomeIcon, PowerIcon, SubscriptionIcon, ChatIcon, UserIcon } from './icons';
 
 interface MobileBottomNavProps {
-  isKeyboardOpen: boolean;
+  /** Открыто выезжающее меню шапки: у него есть все те же пункты, панель поверх него лишняя. */
+  isMenuOpen?: boolean;
 }
 
 /**
@@ -20,18 +22,14 @@ interface MobileBottomNavProps {
  * a predictable bar is the whole point for the non-technical audience). Hidden
  * features never appear here. Restyled to the RocketJump champagne brand.
  */
-export function MobileBottomNav({ isKeyboardOpen }: MobileBottomNavProps) {
+export function MobileBottomNav({ isMenuOpen = false }: MobileBottomNavProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const { haptic } = usePlatform();
+  const isKeyboardOpen = useVirtualKeyboard();
 
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
-
-  // Focused checkout: hide the tab bar on the purchase screen so the sticky
-  // pay bar owns the bottom edge (NOTES_purchase_redesign §3, owner decision 2).
-  const hideOnCheckout = location.pathname.startsWith('/subscription/buy');
-  if (hideOnCheckout) return null;
 
   const items = [
     { path: '/', label: t('nav.home'), icon: HomeIcon },
@@ -52,12 +50,14 @@ export function MobileBottomNav({ isKeyboardOpen }: MobileBottomNavProps) {
         // Light brand surface; dark theme keeps a dark glass via the .light variant fallback.
         'border border-champagne-300 bg-champagne-50/95 backdrop-blur-md',
         'dark:border-dark-700/30 dark:bg-dark-900/95',
-        isKeyboardOpen ? 'pointer-events-none opacity-0' : 'opacity-100',
+        isKeyboardOpen || isMenuOpen ? HIDDEN_UNDER_KEYBOARD : 'opacity-100',
       )}
       style={{
-        bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-        left: '16px',
-        right: '16px',
+        // Offset/clearance live in globals.css (--mobile-nav-*); side insets
+        // keep the bar clear of landscape notches.
+        bottom: 'var(--mobile-nav-offset)',
+        left: 'max(16px, env(safe-area-inset-left, 0px))',
+        right: 'max(16px, env(safe-area-inset-right, 0px))',
         borderRadius: 'var(--bento-radius, 24px)',
         padding: '8px 4px',
         boxShadow: '0 4px 30px rgba(14, 27, 44, 0.12)',

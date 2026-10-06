@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { transliterate } from '../utils/transliterate';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
@@ -37,7 +38,8 @@ import {
   TrashSmallIcon,
   PlusSmallIcon,
 } from '@/components/icons';
-import type { InfoPageType, FaqItem, ReplacesTab } from '../api/infoPages';
+import type { InfoPageType, FaqItem, ReplacesTab, InfoPageDisplayMode } from '../api/infoPages';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 const AVAILABLE_LOCALES = ['ru', 'en', 'zh', 'fa'] as const;
 type LocaleCode = (typeof AVAILABLE_LOCALES)[number];
@@ -90,47 +92,8 @@ function isSafeUrl(url: string | null | undefined): boolean {
 }
 
 // --- Slug utility ---
-const TRANSLIT_MAP: Record<string, string> = {
-  а: 'a',
-  б: 'b',
-  в: 'v',
-  г: 'g',
-  д: 'd',
-  е: 'e',
-  ё: 'yo',
-  ж: 'zh',
-  з: 'z',
-  и: 'i',
-  й: 'y',
-  к: 'k',
-  л: 'l',
-  м: 'm',
-  н: 'n',
-  о: 'o',
-  п: 'p',
-  р: 'r',
-  с: 's',
-  т: 't',
-  у: 'u',
-  ф: 'f',
-  х: 'kh',
-  ц: 'ts',
-  ч: 'ch',
-  ш: 'sh',
-  щ: 'shch',
-  ъ: '',
-  ы: 'y',
-  ь: '',
-  э: 'e',
-  ю: 'yu',
-  я: 'ya',
-};
-
 function generateSlug(title: string): string {
-  const lower = title.toLowerCase();
-  const transliterated = Array.from(lower)
-    .map((ch) => TRANSLIT_MAP[ch] ?? ch)
-    .join('');
+  const transliterated = transliterate(title);
   return transliterated
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/[\s_]+/g, '-')
@@ -643,6 +606,7 @@ export default function AdminInfoPageEditor() {
   const [sortOrder, setSortOrder] = useState(0);
   const [pageType, setPageType] = useState<InfoPageType>(initialPageType);
   const [replacesTab, setReplacesTab] = useState<ReplacesTab | null>(null);
+  const [displayMode, setDisplayMode] = useState<InfoPageDisplayMode>('both');
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // FAQ Q&A state per locale
@@ -857,6 +821,7 @@ export default function AdminInfoPageEditor() {
     setSortOrder(pageData.sort_order);
     setPageType(pageData.page_type ?? 'page');
     setReplacesTab(pageData.replaces_tab ?? null);
+    setDisplayMode(pageData.display_mode ?? 'both');
     setTitles(pageData.title);
 
     if (pageData.page_type === 'faq') {
@@ -927,6 +892,7 @@ export default function AdminInfoPageEditor() {
       sort_order: number;
       icon: string | null;
       replaces_tab: ReplacesTab | null;
+      display_mode: InfoPageDisplayMode;
     }) => {
       if (isEdit && pageId != null) {
         return infoPagesApi.updatePage(pageId, data);
@@ -976,6 +942,7 @@ export default function AdminInfoPageEditor() {
       sort_order: sortOrder,
       icon: icon.trim() || null,
       replaces_tab: replacesTab,
+      display_mode: displayMode,
     };
 
     haptic.buttonPress();
@@ -1002,19 +969,19 @@ export default function AdminInfoPageEditor() {
 
   if (isEdit && isLoadingPage) {
     return (
-      <div className="space-y-6">
-        <div className="skeleton h-8 w-48 rounded-lg" />
-        <div className="skeleton h-12 w-full rounded-xl" />
-        <div className="skeleton h-64 w-full rounded-xl" />
-      </div>
+      <SkeletonGroup className="space-y-6">
+        <Skeleton className="h-8 w-48 rounded-lg" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </SkeletonGroup>
     );
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
           <AdminBackButton to="/admin/info-pages" />
           <h1 className="text-xl font-bold text-dark-100">
             {isEdit ? t('admin.infoPages.edit') : t('admin.infoPages.create')}
@@ -1023,7 +990,7 @@ export default function AdminInfoPageEditor() {
         <button
           onClick={handleSave}
           disabled={saveMutation.isPending || !slug.trim()}
-          className="min-h-[44px] rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-[44px] rounded-lg bg-accent-500 px-6 py-2.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saveMutation.isPending ? t('admin.infoPages.saving') : t('admin.infoPages.save')}
         </button>
@@ -1089,6 +1056,31 @@ export default function AdminInfoPageEditor() {
           <span className="text-sm text-dark-300">{t('admin.infoPages.fields.isActive')}</span>
         </div>
 
+        <div>
+          <label id="ip-displaymode-label" className="label">
+            {t('admin.infoPages.fields.displayMode')}
+          </label>
+          <div className="flex gap-1" role="radiogroup" aria-labelledby="ip-displaymode-label">
+            {(['bot', 'web', 'both'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={displayMode === mode}
+                onClick={() => setDisplayMode(mode)}
+                className={cn(
+                  'min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
+                  displayMode === mode
+                    ? 'bg-accent-500 text-on-accent'
+                    : 'bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-100',
+                )}
+              >
+                {t(`admin.infoPages.displayModes.${mode}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Page type selector */}
         <div>
           <label id="ip-pagetype-label" className="label">
@@ -1107,7 +1099,7 @@ export default function AdminInfoPageEditor() {
                   pageType === pt
                     ? pt === 'faq'
                       ? 'bg-warning-500 text-white'
-                      : 'bg-accent-500 text-white'
+                      : 'bg-accent-500 text-on-accent'
                     : 'bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-100',
                 )}
               >
@@ -1165,7 +1157,7 @@ export default function AdminInfoPageEditor() {
                 className={cn(
                   'min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
                   activeLocale === loc
-                    ? 'bg-accent-500 text-white'
+                    ? 'bg-accent-500 text-on-accent'
                     : 'bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-100',
                 )}
               >
@@ -1386,7 +1378,7 @@ export default function AdminInfoPageEditor() {
         <button
           onClick={handleSave}
           disabled={saveMutation.isPending || !slug.trim()}
-          className="min-h-[44px] w-full rounded-lg bg-accent-500 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-[44px] w-full rounded-lg bg-accent-500 py-3 text-sm font-medium text-on-accent transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saveMutation.isPending ? t('admin.infoPages.saving') : t('admin.infoPages.save')}
         </button>

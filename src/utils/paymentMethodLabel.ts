@@ -29,7 +29,13 @@ export function classifyPaymentMethod(method: Pick<PaymentMethod, 'id' | 'name'>
     hay.includes('cryptobot')
   )
     return 'crypto';
-  if (hay.includes('sbp') || hay.includes('сбп') || hay.includes('fpgate') || hay.includes('p2p'))
+  if (
+    hay.includes('sbp') ||
+    hay.includes('сбп') ||
+    hay.includes('fpgate') ||
+    hay.includes('p2p') ||
+    hay.includes('cashera')
+  )
     return 'sbp';
   // Everything else with a card-ish signal → «Карта РФ».
   if (

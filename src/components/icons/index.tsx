@@ -12,6 +12,7 @@ import {
   PiClock,
   PiCopy,
   PiCreditCard,
+  PiDiceFive,
   PiDownloadSimple,
   PiGameController,
   PiGearSix,
@@ -32,11 +33,11 @@ import {
   PiPlay,
   PiPlus,
   PiShield,
+  PiShuffle,
   PiSignOut,
   PiSparkle,
   PiStar,
   PiStarFill,
-  PiDiceFive,
   PiStop,
   PiSun,
   PiTrash,
@@ -45,6 +46,7 @@ import {
   PiUsers,
   PiWallet,
   PiX,
+  PiQrCode,
 } from 'react-icons/pi';
 
 import { cn } from '@/lib/utils';
@@ -119,6 +121,10 @@ export const TrashIcon = ({ className }: IconProps) => (
 
 export const UploadIcon = ({ className }: IconProps) => (
   <PiUploadSimple className={cn('h-5 w-5', className)} />
+);
+
+export const QrCodeIcon = ({ className }: IconProps) => (
+  <PiQrCode className={cn('h-5 w-5', className)} />
 );
 
 export const DownloadIcon = ({ className }: IconProps) => (
@@ -295,4 +301,8 @@ export const PauseIcon = ({ className, style }: IconProps & { style?: CSSPropert
 
 export const CreditCardIcon = ({ className }: IconProps) => (
   <PiCreditCard className={cn('h-5 w-5', className)} />
+);
+/** Смена выхода в повторе GEO: «перемешать» — другой провайдер или IP в том же городе. */
+export const ShuffleIcon = ({ className }: IconProps) => (
+  <PiShuffle className={cn('h-4 w-4', className)} />
 );

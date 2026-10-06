@@ -1,10 +1,20 @@
 import { useParams, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../hooks/useCurrency';
 import i18n from '../i18n';
-import { promocodesApi, PromoCodeType } from '../api/promocodes';
+import { promocodesApi, type PromoCodeType } from '../api/promocodes';
 import { AdminBackButton } from '../components/admin';
-import { EditIcon, ClockIcon, UserIcon } from '@/components/icons';
+import { StatCard } from '../components/stats';
+import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
+import {
+  EditIcon,
+  ClockIcon,
+  UserIcon,
+  ChartBarIcon,
+  SparklesIcon,
+  TicketIcon,
+} from '@/components/icons';
 
 // Helper functions
 const getTypeLabel = (type: PromoCodeType): string => {
@@ -14,6 +24,7 @@ const getTypeLabel = (type: PromoCodeType): string => {
     trial_subscription: i18n.t('admin.promocodes.type.trialSubscription'),
     promo_group: i18n.t('admin.promocodes.type.promoGroup'),
     discount: i18n.t('admin.promocodes.type.discount'),
+    balance_and_days: i18n.t('admin.promocodes.type.balanceAndDays'),
   };
   return labels[type] || type;
 };
@@ -25,6 +36,7 @@ const getTypeColor = (type: PromoCodeType): string => {
     trial_subscription: 'bg-accent-500/20 text-accent-400',
     promo_group: 'bg-warning-500/20 text-warning-400',
     discount: 'bg-pink-500/20 text-pink-400',
+    balance_and_days: 'bg-success-500/20 text-success-400',
   };
   return colors[type] || 'bg-dark-600 text-dark-300';
 };
@@ -55,6 +67,7 @@ const formatDateTime = (date: string | null): string => {
 
 export default function AdminPromocodeStats() {
   const { t } = useTranslation();
+  const { formatPositive } = useCurrency();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
@@ -70,9 +83,14 @@ export default function AdminPromocodeStats() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-      </div>
+      <PageSkeleton variant="admin" leading={1} titleWidth="w-56" className="space-y-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard loading />
+          <StatCard loading />
+          <StatCard loading />
+        </div>
+        <Skeleton variant="card" className="h-64" />
+      </PageSkeleton>
     );
   }
 
@@ -116,7 +134,7 @@ export default function AdminPromocodeStats() {
         </div>
         <button
           onClick={() => navigate(`/admin/promocodes/${id}/edit`)}
-          className="flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-white transition-colors hover:bg-accent-600"
+          className="flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-on-accent transition-colors hover:bg-accent-600"
         >
           <EditIcon />
           {t('admin.promocodes.modal.edit')}
@@ -125,25 +143,29 @@ export default function AdminPromocodeStats() {
 
       <div className="space-y-6">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4 text-center">
-            <div className="mb-1 text-3xl font-bold text-dark-100">{promocode.total_uses}</div>
-            <div className="text-sm text-dark-400">{t('admin.promocodes.stats.totalUses')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4 text-center">
-            <div className="mb-1 text-3xl font-bold text-success-400">{promocode.today_uses}</div>
-            <div className="text-sm text-dark-400">{t('admin.promocodes.stats.today')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4 text-center">
-            <div className="mb-1 text-3xl font-bold text-accent-400">
-              {promocode.max_uses === 0 ? '∞' : promocode.uses_left}
-            </div>
-            <div className="text-sm text-dark-400">{t('admin.promocodes.stats.remaining')}</div>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard
+            label={t('admin.promocodes.stats.totalUses')}
+            value={promocode.total_uses}
+            icon={<ChartBarIcon className="h-5 w-5" />}
+            tone="neutral"
+          />
+          <StatCard
+            label={t('admin.promocodes.stats.today')}
+            value={promocode.today_uses}
+            icon={<SparklesIcon className="h-5 w-5" />}
+            tone="success"
+          />
+          <StatCard
+            label={t('admin.promocodes.stats.remaining')}
+            value={promocode.max_uses === 0 ? '∞' : promocode.uses_left}
+            icon={<TicketIcon className="h-5 w-5" />}
+            tone="accent"
+          />
         </div>
 
         {/* Details */}
-        <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
+        <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-4">
           <h4 className="mb-4 font-medium text-dark-200">{t('admin.promocodes.stats.details')}</h4>
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div className="flex justify-between rounded-lg bg-dark-700/50 p-3">
@@ -154,7 +176,7 @@ export default function AdminPromocodeStats() {
               <div className="flex justify-between rounded-lg bg-dark-700/50 p-3">
                 <span className="text-dark-400">{t('admin.promocodes.stats.bonus')}:</span>
                 <span className="text-success-400">
-                  +{promocode.balance_bonus_rubles} {t('admin.promocodes.form.rub')}
+                  {formatPositive(promocode.balance_bonus_rubles)}
                 </span>
               </div>
             )}
@@ -221,7 +243,7 @@ export default function AdminPromocodeStats() {
         </div>
 
         {/* Usage History */}
-        <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
+        <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-4">
           <h4 className="mb-4 flex items-center gap-2 font-medium text-dark-200">
             <ClockIcon className="h-4 w-4" />
             {t('admin.promocodes.stats.usageHistory')}

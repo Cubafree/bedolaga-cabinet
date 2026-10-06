@@ -12,6 +12,7 @@ import {
 import { adminSettingsApi, type SettingDefinition } from '../api/adminSettings';
 import { AdminBackButton } from '../components/admin';
 import { Toggle } from '../components/admin/Toggle';
+import { PageSkeleton, Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 import {
   ChannelIcon,
   PlusIcon,
@@ -88,14 +89,9 @@ function GlobalSettingsSection() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-6">
-        <div className="flex items-center gap-3">
-          <div className="animate-spin">
-            <RefreshIcon />
-          </div>
-          <span className="text-sm text-dark-400">{t('common.loading')}</span>
-        </div>
-      </div>
+      <PageSkeleton variant="admin" leading={2} titleWidth="w-56" className="space-y-6">
+        <Skeleton variant="card" count={2} className="h-40" />
+      </PageSkeleton>
     );
   }
 
@@ -424,7 +420,7 @@ function AddChannelForm({
           <button
             onClick={handleSubmit}
             disabled={!channelId.trim() || isLoading}
-            className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-sm text-white transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-sm text-on-accent transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <CheckIcon />
             {t('admin.channelSubscriptions.form.submit')}
@@ -499,7 +495,7 @@ function EditChannelForm({
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-sm text-white transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-sm text-on-accent transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <CheckIcon />
             {t('admin.channelSubscriptions.form.save')}
@@ -614,8 +610,8 @@ export default function AdminChannelSubscriptions() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
           <AdminBackButton />
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-accent-500/20 p-2 text-accent-400">
@@ -641,7 +637,7 @@ export default function AdminChannelSubscriptions() {
             <button
               onClick={() => setShowAddForm(true)}
               aria-label={t('admin.channelSubscriptions.addChannel')}
-              className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-white transition-colors hover:bg-accent-600"
+              className="flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-on-accent transition-colors hover:bg-accent-600"
             >
               <PlusIcon />
               <span className="hidden sm:inline">{t('admin.channelSubscriptions.addChannel')}</span>
@@ -674,12 +670,9 @@ export default function AdminChannelSubscriptions() {
 
       {/* Channel list */}
       {isLoading ? (
-        <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-8 text-center text-dark-400">
-          <div className="mx-auto mb-2 w-fit animate-spin">
-            <RefreshIcon />
-          </div>
-          <p>{t('common.loading')}</p>
-        </div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={3} className="h-16" />
+        </SkeletonGroup>
       ) : channels.length === 0 ? (
         <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-8 text-center text-dark-400">
           <div className="mx-auto mb-2 w-fit">

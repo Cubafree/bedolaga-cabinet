@@ -8,6 +8,7 @@ import { useCurrency } from '../hooks/useCurrency';
 import { Kicker } from '../components/ui/Kicker';
 import { TariffsPurchasePanel } from '../components/subscription/purchase/TariffsPurchasePanel';
 import { ClassicPurchasePanel } from '../components/subscription/purchase/ClassicPurchasePanel';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 // ──────────────────────────────────────────────────────────────────
 // SubscriptionPurchase — the ONE consolidated «Выбор подписки» screen
@@ -84,7 +85,9 @@ export default function SubscriptionPurchase() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-40 lg:pb-6">
       <div className="flex items-center gap-3">
-        <WebBackButton to={subscriptionId ? `/subscriptions/${subscriptionId}` : '/subscriptions'} />
+        <WebBackButton
+          to={subscriptionId ? `/subscriptions/${subscriptionId}` : '/subscriptions'}
+        />
         <div>
           <Kicker>{t('subscription.buyKicker', 'Выбор подписки')}</Kicker>
           <h1 className="font-display text-2xl font-bold text-champagne-900 dark:text-dark-50">
@@ -95,13 +98,13 @@ export default function SubscriptionPurchase() {
 
       {/* Balance chip — ALWAYS on, top (the headline fix). */}
       {loading ? (
-        <div className="h-12 animate-pulse rounded-full bg-champagne-200/60 dark:bg-dark-800/60" />
+        <Skeleton className="h-12 rounded-full" />
       ) : (
         <div className="flex items-center justify-between rounded-full border border-champagne-300 bg-champagne-100 px-4 py-2.5 dark:border-dark-700/40 dark:bg-dark-800/60">
           <span className="font-mono text-[11px] uppercase tracking-wider text-champagne-600 dark:text-dark-400">
             {t('subscription.yourBalance', 'Ваш баланс')}{' '}
             <span className="font-sans font-semibold normal-case tracking-normal text-champagne-900 dark:text-dark-50">
-              {formatAmount(balanceKopeks / 100)} {currencySymbol}
+              {formatAmount(balanceKopeks / 100)} {currencySymbol}
             </span>
           </span>
           <Link to={topUpHref} className="text-[13px] font-medium text-accent-600 hover:underline">
@@ -112,14 +115,14 @@ export default function SubscriptionPurchase() {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="space-y-3">
-          <div className="h-5 w-16 animate-pulse rounded bg-champagne-200/60 dark:bg-dark-800/60" />
+        <SkeletonGroup className="space-y-3">
+          <Skeleton className="h-5 w-16 rounded" />
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
-            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
-            <div className="h-24 animate-pulse rounded-2xl bg-champagne-200/60 dark:bg-dark-800/60" />
+            <Skeleton variant="card" className="h-24 rounded-2xl" />
+            <Skeleton variant="card" className="h-24 rounded-2xl" />
+            <Skeleton variant="card" className="h-24 rounded-2xl" />
           </div>
-        </div>
+        </SkeletonGroup>
       )}
 
       {/* Error / no options */}
@@ -130,7 +133,7 @@ export default function SubscriptionPurchase() {
           </p>
           <button
             onClick={() => refetchOptions()}
-            className="rounded-xl bg-accent-500 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600"
+            className="rounded-xl bg-accent-500 px-6 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-600"
           >
             {t('common.retry')}
           </button>
@@ -174,7 +177,7 @@ export default function SubscriptionPurchase() {
             </p>
             <button
               onClick={() => refetchOptions()}
-              className="rounded-xl bg-accent-500 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600"
+              className="rounded-xl bg-accent-500 px-6 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-600"
             >
               {t('common.retry')}
             </button>

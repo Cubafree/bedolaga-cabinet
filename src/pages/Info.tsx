@@ -1,55 +1,22 @@
+import { uiLocale } from '@/utils/uiLocale';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { PiCaretDown } from 'react-icons/pi';
 import DOMPurify from 'dompurify';
-import { infoApi, FaqPage } from '../api/info';
+import { infoApi, type FaqPage, type InfoVisibility } from '../api/info';
+import { formatContent } from '../utils/legalContent';
 import { infoPagesApi } from '../api/infoPages';
-import { promoApi, LoyaltyTierInfo } from '../api/promo';
+import { promoApi, type LoyaltyTierInfo } from '../api/promo';
 import type { FaqItem, ReplacesTab } from '../api/infoPages';
 import { DocumentIcon, InfoIcon, QuestionIcon, ShieldIcon, StarIcon } from '@/components/icons';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
   <PiCaretDown className={`h-5 w-5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
 );
 
 const BUILTIN_TABS = new Set<string>(['faq', 'rules', 'privacy', 'offer', 'loyalty']);
-
-// Sanitize HTML content to prevent XSS
-const sanitizeHtml = (html: string): string => {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      'p',
-      'br',
-      'b',
-      'i',
-      'u',
-      'strong',
-      'em',
-      'a',
-      'ul',
-      'ol',
-      'li',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
-      'blockquote',
-      'code',
-      'pre',
-      's',
-      'del',
-      'ins',
-      'span',
-      'div',
-      'tg-spoiler',
-    ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'start'],
-    ALLOW_DATA_ATTR: false,
-  });
-};
 
 // Rich sanitizer for custom InfoPage content (TipTap editor output with media)
 const ALLOWED_IFRAME_HOSTS = new Set([
@@ -181,55 +148,6 @@ const sanitizeRichHtml = (html: string): string => {
   return infoPagePurify.sanitize(html, RICH_SANITIZE_CONFIG);
 };
 
-// Convert content to formatted HTML (handles Telegram HTML + plain text)
-const formatContent = (content: string): string => {
-  if (!content) return '';
-
-  // Check if content has block-level HTML (full HTML document)
-  const hasBlockHtml = /<(p|div|h[1-6]|ul|ol|blockquote)\b/i.test(content);
-
-  if (hasBlockHtml) {
-    return sanitizeHtml(content);
-  }
-
-  // Content may have inline Telegram HTML (<b>, <i>, <u>, <code>, <a>) but uses
-  // newlines for structure. Convert newlines to paragraphs while preserving inline tags.
-  const result = content
-    .split(/\n\n+/)
-    .map((paragraph) => {
-      const trimmed = paragraph.trim();
-      if (!trimmed) return '';
-
-      // Check if it's a markdown header
-      if (/^#{1,4}\s/.test(trimmed)) {
-        const level = trimmed.match(/^(#{1,4})/)?.[1].length || 1;
-        const text = trimmed.replace(/^#{1,4}\s*/, '');
-        return `<h${level}>${text}</h${level}>`;
-      }
-
-      // Check for list items
-      if (/^[-•]\s/.test(trimmed) || /^\d+[.)]\s/.test(trimmed)) {
-        const lines = trimmed.split('\n');
-        const isOrdered = /^\d+[.)]\s/.test(lines[0]);
-        const startNum = isOrdered ? parseInt(lines[0].match(/^(\d+)/)?.[1] || '1', 10) : 1;
-        const listItems = lines
-          .map((line) => line.replace(/^[-•]\s*/, '').replace(/^\d+[.)]\s*/, ''))
-          .filter((line) => line.trim())
-          .map((line) => `<li>${line}</li>`)
-          .join('');
-        return isOrdered ? `<ol start="${startNum}">${listItems}</ol>` : `<ul>${listItems}</ul>`;
-      }
-
-      // Regular paragraph — single newlines become <br/>
-      const formatted = trimmed.split('\n').join('<br/>');
-      return `<p>${formatted}</p>`;
-    })
-    .filter(Boolean)
-    .join('');
-
-  return sanitizeHtml(result);
-};
-
 // --- FAQ Accordion for tab replacements ---
 
 function ReplacementFaqItem({
@@ -331,6 +249,12 @@ export default function Info() {
     staleTime: 60_000,
   });
 
+  const { data: visibility } = useQuery({
+    queryKey: ['info-visibility'],
+    queryFn: infoApi.getVisibility,
+    staleTime: 60_000,
+  });
+
   // Filter to only pages that don't replace a built-in tab and don't collide with built-in IDs
   const extraPages = useMemo(
     () => (customPages ?? []).filter((p) => !p.replaces_tab && !BUILTIN_TABS.has(p.slug)),
@@ -386,32 +310,32 @@ export default function Info() {
   }, [infoPage, locale]);
 
   const { data: faqPages, isLoading: faqLoading } = useQuery({
-    queryKey: ['faq-pages'],
-    queryFn: infoApi.getFaqPages,
+    queryKey: ['faq-pages', locale],
+    queryFn: () => infoApi.getFaqPages(locale),
     enabled: activeTab === 'faq' && !currentTabSlug && replacementsLoaded,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
   const { data: rules, isLoading: rulesLoading } = useQuery({
-    queryKey: ['rules'],
-    queryFn: infoApi.getRules,
+    queryKey: ['rules', locale],
+    queryFn: () => infoApi.getRules(locale),
     enabled: activeTab === 'rules' && !currentTabSlug && replacementsLoaded,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
   const { data: privacy, isLoading: privacyLoading } = useQuery({
-    queryKey: ['privacy-policy'],
-    queryFn: infoApi.getPrivacyPolicy,
+    queryKey: ['privacy-policy', locale],
+    queryFn: () => infoApi.getPrivacyPolicy(locale),
     enabled: activeTab === 'privacy' && !currentTabSlug && replacementsLoaded,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
   const { data: offer, isLoading: offerLoading } = useQuery({
-    queryKey: ['public-offer'],
-    queryFn: infoApi.getPublicOffer,
+    queryKey: ['public-offer', locale],
+    queryFn: () => infoApi.getPublicOffer(locale),
     enabled: activeTab === 'offer' && !currentTabSlug && replacementsLoaded,
     staleTime: 0,
     refetchOnMount: 'always',
@@ -425,20 +349,36 @@ export default function Info() {
     refetchOnMount: 'always',
   });
 
-  const builtinTabs: Array<{ id: string; label: string; icon: React.FC; emoji?: string }> = [
-    { id: 'faq', label: t('info.faq'), icon: QuestionIcon },
-    { id: 'rules', label: t('info.rules'), icon: DocumentIcon },
-    { id: 'privacy', label: t('info.privacy'), icon: ShieldIcon },
-    { id: 'offer', label: t('info.offer'), icon: DocumentIcon },
-    { id: 'loyalty', label: t('info.loyalty'), icon: StarIcon },
-  ];
+  const tabs = useMemo(() => {
+    const builtinTabs: Array<{ id: string; label: string; icon: React.FC; emoji?: string }> = [
+      { id: 'faq', label: t('info.faq'), icon: QuestionIcon },
+      { id: 'rules', label: t('info.rules'), icon: DocumentIcon },
+      { id: 'privacy', label: t('info.privacy'), icon: ShieldIcon },
+      { id: 'offer', label: t('info.offer'), icon: DocumentIcon },
+      { id: 'loyalty', label: t('info.loyalty'), icon: StarIcon },
+    ];
 
-  const customTabs = extraPages.map((p) => {
-    const label = p.title[locale] || p.title['ru'] || p.title['en'] || p.slug;
-    return { id: p.slug, label, icon: DocumentIcon, emoji: p.icon ?? undefined };
-  });
+    const visibleBuiltinTabs = builtinTabs.filter((tab) => {
+      if (tab.id === 'loyalty') return true;
+      if (tabReplacements?.[tab.id as ReplacesTab]) return true;
+      if (!visibility) return true;
+      return visibility[tab.id as keyof InfoVisibility];
+    });
 
-  const tabs = [...builtinTabs, ...customTabs];
+    const customTabs = extraPages.map((p) => {
+      const label = p.title[locale] || p.title['ru'] || p.title['en'] || p.slug;
+      return { id: p.slug, label, icon: DocumentIcon, emoji: p.icon ?? undefined };
+    });
+
+    return [...visibleBuiltinTabs, ...customTabs];
+  }, [visibility, tabReplacements, extraPages, locale, t]);
+
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    if (!tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
 
   const toggleFaq = useCallback((id: number) => {
     setExpandedFaq((prev) => (prev === id ? null : id));
@@ -447,9 +387,9 @@ export default function Info() {
   const renderInfoPageContent = () => {
     if (infoPageLoading) {
       return (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-        </div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={3} className="h-16" />
+        </SkeletonGroup>
       );
     }
 
@@ -484,9 +424,9 @@ export default function Info() {
     // Show spinner while tab replacements are loading (prevents flash of wrong content)
     if (!replacementsLoaded) {
       return (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-        </div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={3} className="h-16" />
+        </SkeletonGroup>
       );
     }
 
@@ -498,9 +438,9 @@ export default function Info() {
     if (activeTab === 'faq') {
       if (faqLoading) {
         return (
-          <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            <Skeleton variant="card" count={3} className="h-16" />
+          </SkeletonGroup>
         );
       }
 
@@ -514,9 +454,9 @@ export default function Info() {
             <div key={faq.id} className="bento-card overflow-hidden p-0">
               <button
                 onClick={() => toggleFaq(faq.id)}
-                className="flex min-h-[52px] w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-dark-800/50"
+                className="flex min-h-[52px] w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-dark-800/50"
               >
-                <span className="font-medium">{faq.title}</span>
+                <span className="min-w-0 font-medium">{faq.title}</span>
                 <ChevronIcon expanded={expandedFaq === faq.id} />
               </button>
               {expandedFaq === faq.id && (
@@ -533,9 +473,9 @@ export default function Info() {
     if (activeTab === 'rules') {
       if (rulesLoading) {
         return (
-          <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            <Skeleton variant="card" count={3} className="h-16" />
+          </SkeletonGroup>
         );
       }
 
@@ -551,7 +491,7 @@ export default function Info() {
           />
           {rules.updated_at && (
             <p className="mt-6 border-t border-dark-700 pt-4 text-sm text-dark-400">
-              {t('info.updatedAt')}: {new Date(rules.updated_at).toLocaleDateString()}
+              {t('info.updatedAt')}: {new Date(rules.updated_at).toLocaleDateString(uiLocale())}
             </p>
           )}
         </div>
@@ -561,9 +501,9 @@ export default function Info() {
     if (activeTab === 'privacy') {
       if (privacyLoading) {
         return (
-          <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            <Skeleton variant="card" count={3} className="h-16" />
+          </SkeletonGroup>
         );
       }
 
@@ -579,7 +519,7 @@ export default function Info() {
           />
           {privacy.updated_at && (
             <p className="mt-6 border-t border-dark-700 pt-4 text-sm text-dark-400">
-              {t('info.updatedAt')}: {new Date(privacy.updated_at).toLocaleDateString()}
+              {t('info.updatedAt')}: {new Date(privacy.updated_at).toLocaleDateString(uiLocale())}
             </p>
           )}
         </div>
@@ -589,9 +529,9 @@ export default function Info() {
     if (activeTab === 'offer') {
       if (offerLoading) {
         return (
-          <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            <Skeleton variant="card" count={3} className="h-16" />
+          </SkeletonGroup>
         );
       }
 
@@ -607,7 +547,7 @@ export default function Info() {
           />
           {offer.updated_at && (
             <p className="mt-6 border-t border-dark-700 pt-4 text-sm text-dark-400">
-              {t('info.updatedAt')}: {new Date(offer.updated_at).toLocaleDateString()}
+              {t('info.updatedAt')}: {new Date(offer.updated_at).toLocaleDateString(uiLocale())}
             </p>
           )}
         </div>
@@ -617,9 +557,9 @@ export default function Info() {
     if (activeTab === 'loyalty') {
       if (loyaltyLoading) {
         return (
-          <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            <Skeleton variant="card" count={3} className="h-16" />
+          </SkeletonGroup>
         );
       }
 
@@ -628,7 +568,7 @@ export default function Info() {
       }
 
       const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('ru-RU', {
+        return new Intl.NumberFormat(uiLocale(), {
           style: 'currency',
           currency: 'RUB',
           minimumFractionDigits: 0,
@@ -735,10 +675,12 @@ export default function Info() {
                       : 'opacity-70'
                 }`}
               >
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                {/* Левая группа сжимается, плашка статуса — нет: раньше она уходила
+                    за карточку, а название уровня обрезалось. */}
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                         tier.is_current
                           ? 'bg-accent-500/20 text-accent-400'
                           : tier.is_achieved
@@ -749,7 +691,9 @@ export default function Info() {
                       <StarIcon />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="truncate font-semibold text-dark-50">{tier.name}</h4>
+                      <h4 className="font-semibold text-dark-50 [overflow-wrap:anywhere]">
+                        {tier.name}
+                      </h4>
                       <p className="text-xs text-dark-400">
                         {t('info.threshold')}: {formatCurrency(tier.threshold_rubles)}
                       </p>
@@ -816,7 +760,7 @@ export default function Info() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex min-h-[44px] shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-accent-500 text-white'
+                ? 'bg-accent-500 text-on-accent'
                 : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
             }`}
           >

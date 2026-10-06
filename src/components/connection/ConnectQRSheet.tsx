@@ -98,12 +98,16 @@ export default function ConnectQRSheet({
             </p>
 
             {!hideLink && (
-              <p className="mb-5 truncate text-center font-mono text-xs text-champagne-500">{url}</p>
+              <p className="mb-5 truncate text-center font-mono text-xs text-champagne-500">
+                {url}
+              </p>
             )}
 
             <PillButton
               variant="soft"
-              leadingIcon={copied ? <CheckIcon className="h-5 w-5" /> : <CopyIcon className="h-5 w-5" />}
+              leadingIcon={
+                copied ? <CheckIcon className="h-5 w-5" /> : <CopyIcon className="h-5 w-5" />
+              }
               onClick={onCopy}
             >
               {copied ? t('connect.link.copied') : t('connect.link.copy')}

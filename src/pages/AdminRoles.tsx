@@ -7,7 +7,17 @@ import { PermissionGate } from '@/components/auth/PermissionGate';
 import { usePermissionStore } from '@/store/permissions';
 import { usePlatform } from '@/platform/hooks/usePlatform';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { BackIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon } from '@/components/icons';
+import {
+  BackIcon,
+  PlusIcon,
+  EditIcon,
+  TrashIcon,
+  ShieldIcon,
+  CheckCircleIcon,
+  CogIcon,
+} from '@/components/icons';
+import { StatCard } from '@/components/stats';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 export default function AdminRoles() {
   const { t } = useTranslation();
@@ -59,7 +69,7 @@ export default function AdminRoles() {
           {!capabilities.hasBackButton && (
             <button
               onClick={() => navigate('/admin')}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
             >
               <BackIcon />
             </button>
@@ -72,7 +82,7 @@ export default function AdminRoles() {
         <PermissionGate permission="roles:create">
           <button
             onClick={() => navigate('/admin/roles/create')}
-            className="flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-white transition-colors hover:bg-accent-600"
+            className="flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-on-accent transition-colors hover:bg-accent-600"
           >
             <PlusIcon />
             {t('admin.roles.createRole')}
@@ -90,30 +100,32 @@ export default function AdminRoles() {
       {/* Stats Overview */}
       {sortedRoles.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-dark-100">{sortedRoles.length}</div>
-            <div className="text-xs text-dark-400">{t('admin.roles.stats.totalRoles')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-accent-400">
-              {sortedRoles.filter((r) => r.is_active).length}
-            </div>
-            <div className="text-xs text-dark-400">{t('admin.roles.stats.active')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-warning-400">
-              {sortedRoles.filter((r) => r.is_system).length}
-            </div>
-            <div className="text-xs text-dark-400">{t('admin.roles.stats.system')}</div>
-          </div>
+          <StatCard
+            label={t('admin.roles.stats.totalRoles')}
+            value={sortedRoles.length}
+            icon={<ShieldIcon className="h-5 w-5" />}
+            tone="neutral"
+          />
+          <StatCard
+            label={t('admin.roles.stats.active')}
+            value={sortedRoles.filter((r) => r.is_active).length}
+            icon={<CheckCircleIcon className="h-5 w-5" />}
+            tone="accent"
+          />
+          <StatCard
+            label={t('admin.roles.stats.system')}
+            value={sortedRoles.filter((r) => r.is_system).length}
+            icon={<CogIcon className="h-5 w-5" />}
+            tone="warning"
+          />
         </div>
       )}
 
       {/* Roles List */}
       {rolesLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-        </div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={3} className="h-16" />
+        </SkeletonGroup>
       ) : rolesError ? (
         <div className="py-12 text-center">
           <p className="text-error-400">{t('admin.roles.errors.loadFailed')}</p>
@@ -174,7 +186,7 @@ export default function AdminRoles() {
                     <button
                       onClick={() => navigate(`/admin/roles/${role.id}/edit`)}
                       disabled={!canManageRole(role.level)}
-                      className="flex-1 rounded-lg bg-dark-700 p-2 text-dark-300 transition-colors hover:bg-dark-600 hover:text-dark-100 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+                      className="flex flex-1 justify-center rounded-lg bg-dark-700 p-2 text-dark-300 transition-colors hover:bg-dark-600 hover:text-dark-100 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
                       title={t('admin.roles.actions.edit')}
                     >
                       <EditIcon />
@@ -184,7 +196,7 @@ export default function AdminRoles() {
                     <button
                       onClick={() => setDeleteConfirm(role.id)}
                       disabled={role.is_system || !canManageRole(role.level)}
-                      className="flex-1 rounded-lg bg-dark-700 p-2 text-dark-300 transition-colors hover:bg-error-500/20 hover:text-error-400 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+                      className="flex flex-1 justify-center rounded-lg bg-dark-700 p-2 text-dark-300 transition-colors hover:bg-error-500/20 hover:text-error-400 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
                       title={t('admin.roles.actions.delete')}
                     >
                       <TrashIcon className="h-4 w-4" />

@@ -3,6 +3,38 @@ import apiClient from './client';
 // Types
 export type BroadcastChannel = 'telegram' | 'email' | 'both';
 
+export interface BroadcastAudienceCondition {
+  client_id?: string; // Editor key; ignored by the API.
+  field: string;
+  operator: 'eq' | 'ne' | 'before' | 'after' | 'between';
+  value: string;
+  value_to?: string | null;
+  label?: string | null;
+  join: 'and' | 'or' | null;
+}
+
+export interface BroadcastAudience {
+  conditions: BroadcastAudienceCondition[];
+}
+
+export interface BroadcastAudiencePreviewUser {
+  id: number;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  telegram_id: number | null;
+  email: string | null;
+}
+
+export interface BroadcastAudiencePreviewResponse {
+  count: number;
+  offset: number;
+  limit: number;
+  users: BroadcastAudiencePreviewUser[];
+}
+
+export interface BroadcastAudienceUserSearchResponse extends BroadcastAudiencePreviewResponse {}
+
 export interface BroadcastFilter {
   key: string;
   label: string;
@@ -25,7 +57,12 @@ export interface BroadcastFiltersResponse {
 
 export interface EmailFiltersResponse {
   filters: BroadcastFilter[];
+  /** By the user's primary promo group; key `promo_group_{id}`. Absent on older bots. */
+  promo_group_filters?: BroadcastFilter[];
 }
+
+/** Email target for exactly one user (sent from the admin user card). */
+export const emailUserTarget = (userId: number) => `user_${userId}`;
 
 export interface TariffForBroadcast {
   id: number;
@@ -52,6 +89,8 @@ export interface CustomBroadcastButton {
   label: string;
   action_type: 'callback' | 'url';
   action_value: string;
+  /** Telegram custom emoji перед текстом кнопки (числовая строка custom_emoji_id) */
+  icon_custom_emoji_id?: string;
 }
 
 export interface BroadcastMedia {
@@ -75,7 +114,8 @@ export interface EmailBroadcastCreateRequest {
 
 export interface CombinedBroadcastCreateRequest {
   channel: BroadcastChannel;
-  target: string;
+  target?: string;
+  audience?: BroadcastAudience;
   // Broadcast category for user notification preference filtering
   category?: 'system' | 'news' | 'promo';
   // Telegram fields
@@ -119,6 +159,7 @@ export interface Broadcast {
   channel?: BroadcastChannel;
   email_subject?: string | null;
   email_html_content?: string | null;
+  audience?: BroadcastAudience | null;
 }
 
 export interface BroadcastListResponse {
@@ -126,10 +167,6 @@ export interface BroadcastListResponse {
   total: number;
   limit: number;
   offset: number;
-}
-
-export interface BroadcastPreviewRequest {
-  target: string;
 }
 
 export interface BroadcastPreviewResponse {
@@ -145,6 +182,31 @@ export interface MediaUploadResponse {
 }
 
 export const adminBroadcastsApi = {
+  searchAudienceUsers: async (params: {
+    field: 'telegram_id' | 'telegram_username' | 'email_user';
+    q: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<BroadcastAudienceUserSearchResponse> => {
+    const response = await apiClient.get<BroadcastAudienceUserSearchResponse>(
+      '/cabinet/admin/broadcasts/audience/users',
+      { params },
+    );
+    return response.data;
+  },
+  previewAudience: async (data: {
+    channel: 'telegram' | 'email';
+    category: 'system' | 'news' | 'promo';
+    audience: BroadcastAudience;
+    offset?: number;
+    limit?: number;
+  }): Promise<BroadcastAudiencePreviewResponse> => {
+    const response = await apiClient.post<BroadcastAudiencePreviewResponse>(
+      '/cabinet/admin/broadcasts/audience/preview',
+      data,
+    );
+    return response.data;
+  },
   // Get all available filters with counts (for Telegram)
   getFilters: async (): Promise<BroadcastFiltersResponse> => {
     const response = await apiClient.get<BroadcastFiltersResponse>(
@@ -184,6 +246,21 @@ export const adminBroadcastsApi = {
       {
         target,
       },
+    );
+    return response.data;
+  },
+
+  // Письмо рассылки так, как его получит адресат: фрагмент — в общей обёртке
+  // писем из редактора шаблонов, полный документ — как есть. Тем же кодом,
+  // что и отправка, чтобы превью не расходилось с письмом.
+  renderEmail: async (data: {
+    subject: string;
+    html_content: string;
+    language?: string;
+  }): Promise<{ subject: string; body_html: string }> => {
+    const response = await apiClient.post<{ subject: string; body_html: string }>(
+      '/cabinet/admin/broadcasts/email-render',
+      data,
     );
     return response.data;
   },

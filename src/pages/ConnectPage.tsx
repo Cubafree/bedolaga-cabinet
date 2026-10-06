@@ -6,7 +6,7 @@ import { openLink as sdkOpenLink } from '@telegram-apps/sdk-react';
 
 import { subscriptionApi } from '../api/subscription';
 import { useTelegramSDK } from '../hooks/useTelegramSDK';
-import { useHaptic, useNotify } from '@/platform';
+import { useHaptic, useNotify, usePlatform } from '@/platform';
 import { useAuthStore } from '../store/auth';
 import { resolveTemplate, hasTemplates } from '../utils/templateEngine';
 import { isHappCryptolinkMode, resolveConnectionUrlForUi } from '../utils/connectionLink';
@@ -30,25 +30,9 @@ import {
   ChevronDownIcon,
   SettingsIcon,
   ArrowRightIcon,
+  QrCodeIcon,
 } from '@/components/icons';
-
-/** Inline QR glyph (no dedicated icon export in the barrel). */
-function QrGlyph({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75H16.5v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h3v3h-3v-3z"
-      />
-    </svg>
-  );
-}
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Подключить `/connect` — the hero connect flow (hi-fi §3).
@@ -65,6 +49,7 @@ export default function ConnectPage() {
   const isAdmin = useAuthStore((state) => state.isAdmin);
   const { isTelegramWebApp } = useTelegramSDK();
   const { impact: hapticImpact, notification: hapticNotify } = useHaptic();
+  const { openLink: platformOpenLink } = usePlatform();
   const notify = useNotify();
 
   const detected = useMemo<DetectedPlatform>(() => detectPlatform(), []);
@@ -79,7 +64,11 @@ export default function ConnectPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: appConfig, isLoading, error } = useQuery<AppConfig>({
+  const {
+    data: appConfig,
+    isLoading,
+    error,
+  } = useQuery<AppConfig>({
     queryKey: ['appConfig'],
     queryFn: () => subscriptionApi.getAppConfig(),
   });
@@ -213,20 +202,14 @@ export default function ConnectPage() {
     return undefined;
   }, [featuredApp]);
 
+  // Platform adapter: Telegram SDK openLink in the Mini App, window.open on web
+  // (raw window.open is intercepted by the Telegram WebView).
   const openExternalUrl = useCallback(
     (url: string) => {
       hapticImpact('light');
-      if (isTelegramWebApp) {
-        try {
-          sdkOpenLink(url, { tryInstantView: false });
-          return;
-        } catch {
-          /* fall through to a normal navigation */
-        }
-      }
-      window.open(url, '_blank', 'noopener,noreferrer');
+      platformOpenLink(url, { tryInstantView: false });
     },
-    [isTelegramWebApp, hapticImpact],
+    [hapticImpact, platformOpenLink],
   );
 
   const hasApps = useMemo(() => {
@@ -249,12 +232,12 @@ export default function ConnectPage() {
     return (
       <div className="space-y-6">
         <div>
-          <div className="skeleton mb-2 h-4 w-28 rounded" />
-          <div className="skeleton h-8 w-56 rounded-lg" />
+          <Skeleton className="mb-2 h-4 w-28 rounded" />
+          <Skeleton className="h-8 w-56 rounded-lg" />
         </div>
-        <div className="skeleton h-10 w-48 rounded-full" />
-        <div className="skeleton h-36 w-full rounded-bento" />
-        <div className="skeleton h-14 w-full rounded-full" />
+        <Skeleton className="h-10 w-48 rounded-full" />
+        <Skeleton variant="card" className="h-36 w-full rounded-bento" />
+        <Skeleton className="h-14 w-full rounded-full" />
       </div>
     );
   }
@@ -276,7 +259,11 @@ export default function ConnectPage() {
         </p>
         {isAdmin && (
           <Link to="/admin/apps">
-            <PillButton variant="dark" fullWidth={false} leadingIcon={<SettingsIcon className="h-4 w-4" />}>
+            <PillButton
+              variant="dark"
+              fullWidth={false}
+              leadingIcon={<SettingsIcon className="h-4 w-4" />}
+            >
               {t('subscription.connection.goToApps')}
             </PillButton>
           </Link>
@@ -438,7 +425,7 @@ export default function ConnectPage() {
         <div className={cn('grid grid-cols-2 gap-2.5', isOneTapPlatform && 'mt-2.5')}>
           <PillButton
             variant="soft"
-            leadingIcon={<QrGlyph className="h-5 w-5" />}
+            leadingIcon={<QrCodeIcon className="h-5 w-5" />}
             disabled={!qrConnectionUrl}
             onClick={() => {
               hapticImpact('light');

@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { AnimatedCheckmark } from '@/components/ui/AnimatedCheckmark';
 import { cn } from '@/lib/utils';
 import { CheckCircleIcon, CheckIcon, CopyIcon } from '@/components/icons';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 const MAX_POLL_MS = 10 * 60 * 1000; // poll an unsettled payment for up to 10 min
 
@@ -98,10 +99,14 @@ export default function GiftClaim() {
   if (isLoading) {
     return (
       <Shell>
-        <div className="flex flex-col items-center gap-4 py-6 text-center">
-          <Spinner className="h-12 w-12 border-[3px]" />
-          <p className="text-sm text-dark-400">{t('common.loading', 'Loading...')}</p>
-        </div>
+        <SkeletonGroup className="flex flex-col items-center gap-5 text-center [overflow-wrap:anywhere]">
+          <Skeleton className="h-10 w-10" />
+          <div className="w-full space-y-2">
+            <Skeleton className="mx-auto h-7 w-48" />
+            <Skeleton className="mx-auto h-5 w-56" />
+          </div>
+          <Skeleton variant="card" className="h-20 w-full" />
+        </SkeletonGroup>
       </Shell>
     );
   }
@@ -168,7 +173,7 @@ export default function GiftClaim() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center gap-5 text-center"
+          className="flex flex-col items-center gap-5 text-center [overflow-wrap:anywhere]"
         >
           <AnimatedCheckmark />
           <h1 className="text-xl font-bold text-dark-50">
@@ -189,7 +194,7 @@ export default function GiftClaim() {
                   'flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all active:scale-[0.98]',
                   copied
                     ? 'bg-success-500/20 text-success-400'
-                    : 'bg-accent-500 text-white hover:bg-accent-400',
+                    : 'bg-accent-500 text-on-accent hover:bg-accent-400',
                 )}
               >
                 {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
@@ -230,7 +235,7 @@ export default function GiftClaim() {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center gap-5 text-center"
+        className="flex flex-col items-center gap-5 text-center [overflow-wrap:anywhere]"
       >
         <div className="text-4xl">🎁</div>
         <div>
@@ -264,7 +269,7 @@ export default function GiftClaim() {
         {gift.bot_claim_link && (
           <a
             href={gift.bot_claim_link}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-accent-500/25 transition-all hover:bg-accent-400 active:scale-[0.98]"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-bold text-on-accent shadow-lg shadow-accent-500/25 transition-all hover:bg-accent-400 active:scale-[0.98]"
           >
             {t('landing.giftClaim.activateTelegram', 'Activate in Telegram')}
           </a>
@@ -303,7 +308,7 @@ export default function GiftClaim() {
               className={cn(
                 'flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold transition-all',
                 isValidEmail(email) && !claimMutation.isPending
-                  ? 'bg-accent-500 text-white hover:bg-accent-400 active:scale-[0.98]'
+                  ? 'bg-accent-500 text-on-accent hover:bg-accent-400 active:scale-[0.98]'
                   : 'cursor-not-allowed bg-dark-800 text-dark-500',
               )}
             >

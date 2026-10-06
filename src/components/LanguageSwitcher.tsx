@@ -1,26 +1,26 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useEffect } from 'react';
-import { infoApi, type LanguageInfo } from '@/api/info';
+import { useQuery } from '@tanstack/react-query';
+import { infoApi } from '@/api/info';
 import { ChevronDownIcon } from '@/components/icons';
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [availableLanguages, setAvailableLanguages] = useState<LanguageInfo[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchLanguages = async () => {
-      try {
-        const data = await infoApi.getLanguages();
-        // Ukrainian intentionally hidden from the cabinet language picker.
-        setAvailableLanguages(data.languages.filter((l) => l.code !== 'uk' && l.code !== 'ua'));
-      } catch {
-        // Silently fall back to empty list — component handles it gracefully
-      }
-    };
-    fetchLanguages();
-  }, []);
+  // Кэш react-query переживает перемонтирование AppShell при смене роута:
+  // локальный useState начинал каждый маунт с пустого списка, и до ответа API
+  // компонент рендерил null — переключатель «мигал» при каждой навигации.
+  const { data } = useQuery({
+    queryKey: ['languages'],
+    queryFn: infoApi.getLanguages,
+    staleTime: 1000 * 60 * 5,
+  });
+  // Ukrainian intentionally hidden from the cabinet language picker.
+  const availableLanguages = (data?.languages ?? []).filter(
+    (l) => l.code !== 'uk' && l.code !== 'ua',
+  );
 
   const currentLang = availableLanguages.find((l) => l.code === i18n.language) ||
     availableLanguages[0] || { code: 'ru', name: 'RU', flag: '🇷🇺' };

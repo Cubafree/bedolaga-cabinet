@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { QRCodeSVG } from 'qrcode.react';
 
 import { balanceApi } from '../api/balance';
 import { useCurrency } from '../hooks/useCurrency';
@@ -15,8 +16,11 @@ import { PillButton } from '@/components/ui/PillButton';
 import { WebBackButton } from '../components/WebBackButton';
 import { saveTopUpPendingInfo } from '../utils/topUpStorage';
 import { getSafeRedirectPath } from '../utils/safeRedirect';
+import { openPaymentUrl } from '../utils/openPaymentUrl';
+import { getApiErrorMessage } from '../utils/api-error';
 import { copyToClipboard } from '@/utils/clipboard';
 import { cn } from '@/lib/utils';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 import {
   CardIcon,
   CheckIcon,
@@ -78,7 +82,6 @@ export default function TopUpAmount() {
   const navigate = useNavigate();
   const { methodId } = useParams<{ methodId: string }>();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient();
   const { formatAmount, currencySymbol, convertAmount, convertToRub, targetCurrency } =
     useCurrency();
   const { openInvoice, openTelegramLink, openLink, platform } = usePlatform();
@@ -90,9 +93,15 @@ export default function TopUpAmount() {
     ? parseFloat(searchParams.get('amount')!)
     : undefined;
 
-  // Get method from cached payment-methods query
-  const cachedMethods = queryClient.getQueryData<PaymentMethod[]>(['payment-methods']);
-  const method = cachedMethods?.find((m) => m.id === methodId);
+  // Fetch payment methods with a real query (dedupes with the method-selection page and
+  // Balance via the shared ['payment-methods'] key). A non-reactive getQueryData read used
+  // to dead-end on an infinite spinner whenever the cache was cold — reload, browser-back
+  // from the provider page, or a deep link straight to this route.
+  const { data: methods, isLoading: isMethodsLoading } = useQuery({
+    queryKey: ['payment-methods'],
+    queryFn: balanceApi.getPaymentMethods,
+  });
+  const method = methods?.find((m) => m.id === methodId);
 
   const handleNavigateBack = useCallback(() => {
     navigate(-1);
@@ -137,12 +146,18 @@ export default function TopUpAmount() {
     getPreferredOptionId(method?.options),
   );
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  // Canonical RUB amount when the user picked a quick-amount chip. The input shows a
+  // rounded display-currency value; validating/charging the canonical RUB avoids the FX
+  // round-trip that could push a min-amount chip just below the allowed minimum. Cleared
+  // as soon as the user edits the field by hand.
+  const [quickRub, setQuickRub] = useState<number | null>(null);
 
-  // If method not found in cache, redirect to method selection
+  // Once methods have loaded, redirect to method selection if this method id is unknown.
   useEffect(() => {
-    if (cachedMethods && !method) {
+    if (methods && !method) {
       const params = new URLSearchParams();
       const amount = searchParams.get('amount');
       const rt = searchParams.get('returnTo');
@@ -151,7 +166,7 @@ export default function TopUpAmount() {
       const qs = params.toString();
       navigate(`/balance/top-up${qs ? `?${qs}` : ''}`, { replace: true });
     }
-  }, [cachedMethods, method, navigate, searchParams]);
+  }, [methods, method, navigate, searchParams]);
 
   useEffect(() => {
     if (!method?.options || method.options.length === 0) {
@@ -190,8 +205,7 @@ export default function TopUpAmount() {
     },
     onError: (err: unknown) => {
       haptic.notification('error');
-      const axiosError = err as { response?: { data?: { detail?: string }; status?: number } };
-      setError(axiosError?.response?.data?.detail || t('balance.errors.invoiceFailed'));
+      setError(getApiErrorMessage(err, t('balance.errors.invoiceFailed')));
     },
   });
 
@@ -204,6 +218,7 @@ export default function TopUpAmount() {
       amount_rubles: number;
       status: string;
       expires_at: string | null;
+      qr_payload?: string | null;
     },
     unknown,
     number
@@ -244,8 +259,19 @@ export default function TopUpAmount() {
           lowerUrl.startsWith('https://t.me/') ||
           lowerUrl.startsWith('http://t.me/') ||
           lowerUrl.startsWith('tg://');
+        // Свой экран оплаты: QR показываем здесь же — уводить на страницу провайдера незачем.
+        if (data.qr_payload) {
+          setQrPayload(data.qr_payload);
+          setPaymentUrl(redirectUrl);
+          return;
+        }
+
         if (method?.open_url_direct && !isTelegramDeepLink) {
-          window.location.href = redirectUrl;
+          // In the Telegram WebView, same-container navigation to the provider page breaks
+          // when it hands off to a bank app via a custom scheme (SBP) — Android shows
+          // ERR_UNKNOWN_URL_SCHEME, iOS opens nothing (bug #654272). Open externally there;
+          // on web keep same-tab navigation.
+          openPaymentUrl(redirectUrl, platform, openLink);
           return;
         }
 
@@ -253,8 +279,7 @@ export default function TopUpAmount() {
       }
     },
     onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '';
+      const detail = getApiErrorMessage(err, '');
       setError(
         detail.includes('not yet implemented') ? t('balance.useBot') : detail || t('common.error'),
       );
@@ -272,11 +297,17 @@ export default function TopUpAmount() {
     return () => clearTimeout(timer);
   }, [platform]);
 
+  // Spinner only while methods are actually loading. Once the query has resolved without
+  // this method, the redirect effect above navigates away (so we render nothing here rather
+  // than spinning forever on a cold cache).
   if (!method) {
+    if (!isMethodsLoading) {
+      return null;
+    }
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-      </div>
+      <SkeletonGroup className="space-y-3">
+        <Skeleton variant="card" count={3} className="h-16" />
+      </SkeletonGroup>
     );
   }
 
@@ -292,6 +323,7 @@ export default function TopUpAmount() {
   const handleSubmit = () => {
     setError(null);
     setPaymentUrl(null);
+    setQrPayload(null);
     inputRef.current?.blur();
 
     if (!checkRateLimit(RATE_LIMIT_KEYS.PAYMENT, 3, 30000)) {
@@ -310,27 +342,43 @@ export default function TopUpAmount() {
       return;
     }
     const amountRubles = convertToRub(amountCurrency);
-    if (amountRubles < minRubles || amountRubles > maxRubles) {
+
+    // Resolve the canonical RUB amount. Prefer an exact source — an unedited prefill or a
+    // quick-amount chip — over the display value, whose FX round-trip rounding (e.g. 150₽ at
+    // rate 90.66 → "1.65" USD → back to 149.59₽) could push a min selection just below the
+    // allowed minimum and block the top-up. quickRub is cleared on any manual edit, so a
+    // non-null value means the field still holds that chip's exact amount.
+    const userEditedAmount = amount.trim() !== initialDisplayAmount.trim();
+    const usingPrefill = !userEditedAmount && !!initialAmountRubles && initialAmountRubles > 0;
+    const usingQuick = quickRub !== null;
+
+    let canonicalRubles = amountRubles;
+    if (usingPrefill) {
+      canonicalRubles = initialAmountRubles as number;
+    } else if (usingQuick && quickRub !== null) {
+      canonicalRubles = quickRub;
+    } else if (targetCurrency !== 'RUB') {
+      // Hand-typed non-RUB amount: snap up to the minimum when it lands within one
+      // display-currency rounding step below it, so typing the advertised (rounded)
+      // minimum isn't rejected by FX rounding.
+      const decimals = targetCurrency === 'IRR' ? 0 : 2;
+      const roundingStep = convertToRub(10 ** -decimals);
+      if (canonicalRubles < minRubles && canonicalRubles >= minRubles - roundingStep) {
+        canonicalRubles = minRubles;
+      }
+    }
+
+    if (canonicalRubles < minRubles || canonicalRubles > maxRubles) {
       setError(t('balance.errors.amountRange', { min: minRubles, max: maxRubles }));
       return;
     }
 
-    // Сохраняем canonical RUB amount если юзер НЕ редактировал префилл.
-    // Display-rounding в `.toFixed(2)` теряет точность: 150₽ при rate=90.66 → "1.65" USD
-    // (округление вниз с 1.6545), back-конвертация даёт 1.65 × 90.66 = 149.589₽ < 150₽
-    // → юзер не может купить подписку 150₽. С canonical RUB обходим FX round-trip.
-    //
-    // Math.ceil для не-RUB локалей покрывает остаточные sub-копеечные ошибки
-    // floating-point, когда юзер реально вводит свой amount.
-    const userEditedAmount = amount.trim() !== initialDisplayAmount.trim();
-    let amountKopeks: number;
-    if (!userEditedAmount && initialAmountRubles && initialAmountRubles > 0) {
-      amountKopeks = Math.round(initialAmountRubles * 100);
-    } else if (targetCurrency === 'RUB') {
-      amountKopeks = Math.round(amountRubles * 100);
-    } else {
-      amountKopeks = Math.ceil(amountRubles * 100);
-    }
+    // Round for exact sources; ceil a hand-typed amount so float noise never lands sub-kopeck
+    // under the chosen value.
+    const amountKopeks =
+      targetCurrency === 'RUB' || usingPrefill || usingQuick
+        ? Math.round(canonicalRubles * 100)
+        : Math.ceil(canonicalRubles * 100);
     if (isStarsMethod) {
       starsPaymentMutation.mutate(amountKopeks);
     } else {
@@ -338,7 +386,11 @@ export default function TopUpAmount() {
     }
   };
 
-  const quickAmounts = [100, 300, 500, 1000].filter((a) => a >= minRubles && a <= maxRubles);
+  const quickAmounts = (
+    method.quick_amounts != null
+      ? method.quick_amounts.map((kopeks) => kopeks / 100)
+      : [100, 300, 500, 1000]
+  ).filter((a) => a >= minRubles && a <= maxRubles);
   const currencyDecimals = targetCurrency === 'IRR' || targetCurrency === 'RUB' ? 0 : 2;
   const getQuickValue = (rub: number) =>
     targetCurrency === 'IRR'
@@ -377,7 +429,9 @@ export default function TopUpAmount() {
           <span
             className={cn(
               'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
-              isStarsMethod ? 'bg-warning-400/15 text-warning-500' : 'bg-accent-500/12 text-accent-600',
+              isStarsMethod
+                ? 'bg-warning-400/15 text-warning-500'
+                : 'bg-accent-500/12 text-accent-600',
             )}
           >
             <span className="flex h-6 w-6 items-center justify-center">
@@ -438,7 +492,10 @@ export default function TopUpAmount() {
             inputMode="decimal"
             enterKeyHint="done"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setQuickRub(null);
+            }}
             onFocus={() => setIsInputFocused(true)}
             onBlur={() => setIsInputFocused(false)}
             onKeyDown={(e) => {
@@ -456,7 +513,7 @@ export default function TopUpAmount() {
           </span>
         </div>
         <p className="font-mono text-[11px] text-champagne-500">
-          {formatAmount(minRubles, 0)} – {formatAmount(maxRubles, 0)} {currencySymbol}
+          {formatAmount(minRubles, 0)} – {formatAmount(maxRubles, 0)} {currencySymbol}
         </p>
       </div>
 
@@ -472,6 +529,7 @@ export default function TopUpAmount() {
                 type="button"
                 onClick={() => {
                   setAmount(val);
+                  setQuickRub(a);
                   inputRef.current?.blur();
                 }}
                 className={cn(
@@ -496,7 +554,7 @@ export default function TopUpAmount() {
         onClick={handleSubmit}
       >
         {amountValid
-          ? t('balance.details.pay', { amount: `${amount} ${currencySymbol}` })
+          ? t('balance.details.pay', { amount: `${amount} ${currencySymbol}` })
           : t('balance.details.topup')}
       </PillButton>
 
@@ -515,9 +573,24 @@ export default function TopUpAmount() {
             <CheckIcon className="h-5 w-5" />
             <span className="font-semibold">{t('balance.paymentReady')}</span>
           </div>
-          <p className="text-sm text-champagne-700 dark:text-dark-300">
-            {t('balance.clickToOpenPayment')}
-          </p>
+
+          {qrPayload ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="rounded-xl bg-white p-3" data-testid="topup-qr">
+                <QRCodeSVG value={qrPayload} size={192} level="M" includeMargin={false} />
+              </div>
+              <p className="text-center text-sm text-champagne-700 dark:text-dark-300">
+                {t(
+                  'balance.scanQrToPay',
+                  'Отсканируйте QR-код в приложении банка или откройте оплату',
+                )}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-champagne-700 dark:text-dark-300">
+              {t('balance.clickToOpenPayment')}
+            </p>
+          )}
           <PillButton
             variant="dark"
             leadingIcon={<ExternalLinkIcon className="h-5 w-5" />}

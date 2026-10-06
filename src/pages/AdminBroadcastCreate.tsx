@@ -1,56 +1,70 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   adminBroadcastsApi,
-  BroadcastFilter,
-  TariffFilter,
-  CombinedBroadcastCreateRequest,
-  CustomBroadcastButton,
+  type CombinedBroadcastCreateRequest,
+  type CustomBroadcastButton,
 } from '../api/adminBroadcasts';
 import { AdminBackButton } from '../components/admin';
+import {
+  BroadcastAudienceEditor,
+  emptyAudience,
+  isAudienceComplete,
+} from '../components/broadcasts/BroadcastAudienceEditor';
 import { TelegramPreview, EmailPreview } from '../components/broadcasts/BroadcastPreview';
 import {
   BroadcastIcon,
-  ChevronDownIcon,
   DocumentIcon,
   EmailIcon,
   PhotoIcon,
   RefreshIcon,
   TelegramIcon,
-  UsersIcon,
   VideoIcon,
   XIcon,
 } from '@/components/icons';
 
-// Filter labels
-const FILTER_GROUP_LABEL_KEYS: Record<string, string> = {
-  basic: 'admin.broadcasts.filterGroups.basic',
-  subscription: 'admin.broadcasts.filterGroups.subscription',
-  traffic: 'admin.broadcasts.filterGroups.traffic',
-  registration: 'admin.broadcasts.filterGroups.registration',
-  activity: 'admin.broadcasts.filterGroups.activity',
-  source: 'admin.broadcasts.filterGroups.source',
-  tariff: 'admin.broadcasts.filterGroups.tariff',
-  email: 'admin.broadcasts.filterGroups.email',
-};
+/** `?email_user=<id>` opens an Email broadcast for one user from their profile. */
+function parseEmailUserParam(value: string | null): number | null {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647 ? id : null;
+}
 
 export default function AdminBroadcastCreate() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const presetEmailUserId = parseEmailUserParam(searchParams.get('email_user'));
+  // Почту кладёт в state карточка пользователя; после перезагрузки остаётся только id.
+  const presetEmailUserLabel =
+    (location.state as { emailUserLabel?: string } | null)?.emailUserLabel ?? null;
 
   // Channel toggles (both can be enabled)
-  const [telegramEnabled, setTelegramEnabled] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [telegramEnabled, setTelegramEnabled] = useState(presetEmailUserId === null);
+  const [emailEnabled, setEmailEnabled] = useState(presetEmailUserId !== null);
 
-  // Separate targets per channel
-  const [telegramTarget, setTelegramTarget] = useState('');
-  const [emailTarget, setEmailTarget] = useState('');
-  const [showTelegramFilters, setShowTelegramFilters] = useState(false);
-  const [showEmailFilters, setShowEmailFilters] = useState(false);
+  // Separate audiences per channel, as in the existing form.
+  const [telegramAudience, setTelegramAudience] = useState(emptyAudience);
+  const [emailAudience, setEmailAudience] = useState(() =>
+    presetEmailUserId === null
+      ? emptyAudience()
+      : {
+          conditions: [
+            {
+              field: 'email_user',
+              operator: 'eq' as const,
+              value: String(presetEmailUserId),
+              label: presetEmailUserLabel ?? `#${presetEmailUserId}`,
+              join: null,
+            },
+          ],
+        },
+  );
 
   // Broadcast category (system/news/promo)
   const [category, setCategory] = useState<'system' | 'news' | 'promo'>('system');
@@ -63,6 +77,7 @@ export default function AdminBroadcastCreate() {
   const [newButtonLabel, setNewButtonLabel] = useState('');
   const [newButtonActionType, setNewButtonActionType] = useState<'callback' | 'url'>('callback');
   const [newButtonActionValue, setNewButtonActionValue] = useState('');
+  const [newButtonEmojiId, setNewButtonEmojiId] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video' | 'document'>('photo');
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -136,21 +151,17 @@ export default function AdminBroadcastCreate() {
     queryFn: adminBroadcastsApi.getEmailFilters,
     enabled: emailEnabled,
   });
+  const { data: emailTariffsData, isLoading: emailTariffsLoading } = useQuery({
+    queryKey: ['admin', 'broadcasts', 'tariffs'],
+    queryFn: adminBroadcastsApi.getTariffs,
+    enabled: emailEnabled,
+  });
 
   // Fetch buttons
   const { data: buttonsData } = useQuery({
     queryKey: ['admin', 'broadcasts', 'buttons'],
     queryFn: adminBroadcastsApi.getButtons,
     enabled: telegramEnabled,
-  });
-
-  // Preview mutations — separate for each channel
-  const telegramPreviewMutation = useMutation({
-    mutationFn: adminBroadcastsApi.preview,
-  });
-
-  const emailPreviewMutation = useMutation({
-    mutationFn: adminBroadcastsApi.previewEmail,
   });
 
   // Create mutation (used for single-channel sends)
@@ -162,84 +173,15 @@ export default function AdminBroadcastCreate() {
     },
   });
 
-  // Group Telegram filters
-  const groupedTelegramFilters = useMemo(() => {
-    if (!filtersData) return {};
-    const groups: Record<string, (BroadcastFilter | TariffFilter)[]> = {};
-
-    filtersData.filters.forEach((f) => {
-      const group = f.group || 'basic';
-      if (!groups[group]) groups[group] = [];
-      groups[group].push(f);
-    });
-
-    if (filtersData.tariff_filters.length > 0) {
-      groups['tariff'] = filtersData.tariff_filters;
-    }
-
-    filtersData.custom_filters.forEach((f) => {
-      const group = f.group || 'custom';
-      if (!groups[group]) groups[group] = [];
-      groups[group].push(f);
-    });
-
-    return groups;
-  }, [filtersData]);
-
-  // Group Email filters
-  const groupedEmailFilters = useMemo(() => {
-    if (!emailFiltersData) return {};
-    const groups: Record<string, BroadcastFilter[]> = {};
-
-    emailFiltersData.filters.forEach((f) => {
-      const group = f.group || 'email';
-      if (!groups[group]) groups[group] = [];
-      groups[group].push(f);
-    });
-
-    return groups;
-  }, [emailFiltersData]);
-
-  // Selected filter info for each channel
-  const selectedTelegramFilter = useMemo(() => {
-    if (!telegramTarget || !filtersData) return null;
-    const all = [
-      ...filtersData.filters,
-      ...filtersData.tariff_filters,
-      ...filtersData.custom_filters,
-    ];
-    return all.find((f) => f.key === telegramTarget) ?? null;
-  }, [telegramTarget, filtersData]);
-
-  const selectedEmailFilter = useMemo(() => {
-    if (!emailTarget || !emailFiltersData) return null;
-    return emailFiltersData.filters.find((f) => f.key === emailTarget) ?? null;
-  }, [emailTarget, emailFiltersData]);
-
   // Handle toggling channels
   const handleToggleTelegram = () => {
     setTelegramEnabled((prev) => !prev);
-    setTelegramTarget('');
-    telegramPreviewMutation.reset();
+    setTelegramAudience(emptyAudience());
   };
 
   const handleToggleEmail = () => {
     setEmailEnabled((prev) => !prev);
-    setEmailTarget('');
-    emailPreviewMutation.reset();
-  };
-
-  // Handle filter selection per channel
-  const handleTelegramFilterSelect = (filterKey: string) => {
-    setTelegramTarget(filterKey);
-    setShowTelegramFilters(false);
-    telegramPreviewMutation.mutate(filterKey);
-  };
-
-  const handleEmailFilterSelect = (filterKey: string) => {
-    setEmailTarget(filterKey);
-    setShowEmailFilters(false);
-    emailPreviewMutation.mutate(filterKey);
+    setEmailAudience(emptyAudience());
   };
 
   // Handle file selection
@@ -305,6 +247,8 @@ export default function AdminBroadcastCreate() {
   // Custom button validation
   const isNewButtonValid = useMemo(() => {
     if (!newButtonLabel.trim() || !newButtonActionValue.trim()) return false;
+    // custom_emoji_id — необязательное поле, но если задано — числовая строка (Bot API)
+    if (newButtonEmojiId.trim() && !/^\d{1,64}$/.test(newButtonEmojiId.trim())) return false;
     if (newButtonActionType === 'url') {
       return /^https:\/\/|^tg:\/\//.test(newButtonActionValue.trim());
     }
@@ -312,22 +256,25 @@ export default function AdminBroadcastCreate() {
       return new TextEncoder().encode(newButtonActionValue.trim()).length <= 64;
     }
     return true;
-  }, [newButtonLabel, newButtonActionType, newButtonActionValue]);
+  }, [newButtonLabel, newButtonActionType, newButtonActionValue, newButtonEmojiId]);
 
   // Custom button handlers
   const addCustomButton = () => {
     if (!isNewButtonValid) return;
+    const emojiId = newButtonEmojiId.trim();
     setCustomButtons((prev) => [
       ...prev,
       {
         label: newButtonLabel.trim(),
         action_type: newButtonActionType,
         action_value: newButtonActionValue.trim(),
+        ...(emojiId ? { icon_custom_emoji_id: emojiId } : {}),
       },
     ]);
     setNewButtonLabel('');
     setNewButtonActionValue('');
     setNewButtonActionType('callback');
+    setNewButtonEmojiId('');
     setIsAddingCustomButton(false);
   };
 
@@ -336,9 +283,13 @@ export default function AdminBroadcastCreate() {
   };
 
   // Validate form
-  const isTelegramValid = telegramEnabled && telegramTarget && messageText.trim().length > 0;
+  const isTelegramValid =
+    telegramEnabled && isAudienceComplete(telegramAudience) && messageText.trim().length > 0;
   const isEmailValid =
-    emailEnabled && emailTarget && emailSubject.trim().length > 0 && emailContent.trim().length > 0;
+    emailEnabled &&
+    isAudienceComplete(emailAudience) &&
+    emailSubject.trim().length > 0 &&
+    emailContent.trim().length > 0;
 
   const isValid = useMemo(() => {
     if (!telegramEnabled && !emailEnabled) return false;
@@ -357,7 +308,7 @@ export default function AdminBroadcastCreate() {
     if (telegramEnabled && !emailEnabled) {
       const data: CombinedBroadcastCreateRequest = {
         channel: 'telegram',
-        target: telegramTarget,
+        audience: telegramAudience,
         message_text: messageText,
         selected_buttons: selectedButtons,
         custom_buttons: customButtons.length > 0 ? customButtons : undefined,
@@ -373,7 +324,7 @@ export default function AdminBroadcastCreate() {
     if (emailEnabled && !telegramEnabled) {
       const data: CombinedBroadcastCreateRequest = {
         channel: 'email',
-        target: emailTarget,
+        audience: emailAudience,
         email_subject: emailSubject,
         email_html_content: emailContent,
         category,
@@ -387,7 +338,7 @@ export default function AdminBroadcastCreate() {
     try {
       const telegramData: CombinedBroadcastCreateRequest = {
         channel: 'telegram',
-        target: telegramTarget,
+        audience: telegramAudience,
         message_text: messageText,
         selected_buttons: selectedButtons,
         custom_buttons: customButtons.length > 0 ? customButtons : undefined,
@@ -399,7 +350,7 @@ export default function AdminBroadcastCreate() {
 
       const emailData: CombinedBroadcastCreateRequest = {
         channel: 'email',
-        target: emailTarget,
+        audience: emailAudience,
         email_subject: emailSubject,
         email_html_content: emailContent,
         category,
@@ -415,90 +366,7 @@ export default function AdminBroadcastCreate() {
     }
   };
 
-  // Recipients counts per channel
-  const telegramRecipientsCount = telegramEnabled
-    ? (telegramPreviewMutation.data?.count ?? selectedTelegramFilter?.count ?? null)
-    : null;
-
-  const emailRecipientsCount = emailEnabled
-    ? (emailPreviewMutation.data?.count ?? selectedEmailFilter?.count ?? null)
-    : null;
-
   const isPending = createMutation.isPending || isSubmitting;
-
-  // Render filter dropdown
-  const renderFilterDropdown = (
-    channelType: 'telegram' | 'email',
-    target: string,
-    selectedFilter: BroadcastFilter | TariffFilter | null,
-    recipientsCount: number | null,
-    showFilters: boolean,
-    setShowFilters: (v: boolean) => void,
-    handleFilterSelect: (key: string) => void,
-    groupedFilters: Record<string, (BroadcastFilter | TariffFilter)[]>,
-    isLoading: boolean,
-  ) => (
-    <div>
-      <label className="mb-2 block text-sm font-medium text-dark-300">
-        {channelType === 'telegram'
-          ? t('admin.broadcasts.selectFilter')
-          : t('admin.broadcasts.selectEmailFilter')}
-      </label>
-      <div className="relative">
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex w-full items-center justify-between rounded-lg border border-dark-700 bg-dark-800 p-3 text-left transition-colors hover:border-dark-600"
-        >
-          <div className="flex items-center gap-2">
-            <UsersIcon />
-            <span className={selectedFilter ? 'text-dark-100' : 'text-dark-400'}>
-              {selectedFilter
-                ? selectedFilter.label
-                : channelType === 'telegram'
-                  ? t('admin.broadcasts.selectFilterPlaceholder')
-                  : t('admin.broadcasts.selectEmailFilterPlaceholder')}
-            </span>
-            {recipientsCount !== null && (
-              <span className="rounded-full bg-accent-500/20 px-2 py-0.5 text-xs text-accent-400">
-                {recipientsCount} {t('admin.broadcasts.recipients')}
-              </span>
-            )}
-          </div>
-          <ChevronDownIcon className="h-4 w-4" />
-        </button>
-
-        {showFilters && (
-          <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-dark-700 bg-dark-800 shadow-xl">
-            {isLoading ? (
-              <div className="p-4 text-center text-dark-400">{t('common.loading')}</div>
-            ) : (
-              Object.entries(groupedFilters).map(([group, filters]) => (
-                <div key={group}>
-                  <div className="sticky top-0 bg-dark-900 px-3 py-2 text-xs font-medium text-dark-400">
-                    {FILTER_GROUP_LABEL_KEYS[group] ? t(FILTER_GROUP_LABEL_KEYS[group]) : group}
-                  </div>
-                  {filters.map((filter) => (
-                    <button
-                      key={filter.key}
-                      onClick={() => handleFilterSelect(filter.key)}
-                      className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-dark-700 ${
-                        target === filter.key ? 'bg-accent-500/20' : ''
-                      }`}
-                    >
-                      <span className="text-dark-100">{filter.label}</span>
-                      {filter.count !== null && filter.count !== undefined && (
-                        <span className="text-xs text-dark-400">{filter.count}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -601,17 +469,22 @@ export default function AdminBroadcastCreate() {
           </div>
 
           {/* Telegram filter selection */}
-          {renderFilterDropdown(
-            'telegram',
-            telegramTarget,
-            selectedTelegramFilter,
-            telegramRecipientsCount,
-            showTelegramFilters,
-            setShowTelegramFilters,
-            handleTelegramFilterSelect,
-            groupedTelegramFilters,
-            filtersLoading,
-          )}
+          <BroadcastAudienceEditor
+            channel="telegram"
+            category={category}
+            audience={telegramAudience}
+            onChange={setTelegramAudience}
+            filters={
+              filtersData
+                ? [
+                    ...filtersData.filters,
+                    ...filtersData.tariff_filters,
+                    ...filtersData.custom_filters,
+                  ]
+                : []
+            }
+            isLoading={filtersLoading}
+          />
 
           {/* Message text */}
           <div>
@@ -702,7 +575,7 @@ export default function AdminBroadcastCreate() {
                   onClick={() => toggleButton(button.key)}
                   className={`rounded-lg px-3 py-2 text-sm transition-colors ${
                     selectedButtons.includes(button.key)
-                      ? 'bg-accent-500 text-white'
+                      ? 'bg-accent-500 text-on-accent'
                       : 'border border-dark-700 bg-dark-800 text-dark-300 hover:bg-dark-700'
                   }`}
                 >
@@ -770,7 +643,7 @@ export default function AdminBroadcastCreate() {
                     onClick={() => setNewButtonActionType('callback')}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm transition-colors ${
                       newButtonActionType === 'callback'
-                        ? 'bg-accent-500 text-white'
+                        ? 'bg-accent-500 text-on-accent'
                         : 'border border-dark-700 bg-dark-800 text-dark-300 hover:bg-dark-700'
                     }`}
                   >
@@ -781,7 +654,7 @@ export default function AdminBroadcastCreate() {
                     onClick={() => setNewButtonActionType('url')}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm transition-colors ${
                       newButtonActionType === 'url'
-                        ? 'bg-accent-500 text-white'
+                        ? 'bg-accent-500 text-on-accent'
                         : 'border border-dark-700 bg-dark-800 text-dark-300 hover:bg-dark-700'
                     }`}
                   >
@@ -800,6 +673,15 @@ export default function AdminBroadcastCreate() {
                   maxLength={newButtonActionType === 'callback' ? 64 : 256}
                   className="input"
                 />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newButtonEmojiId}
+                  onChange={(e) => setNewButtonEmojiId(e.target.value)}
+                  placeholder={t('admin.broadcasts.customButtonEmojiIdPlaceholder')}
+                  maxLength={64}
+                  className="input"
+                />
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -807,6 +689,7 @@ export default function AdminBroadcastCreate() {
                       setIsAddingCustomButton(false);
                       setNewButtonLabel('');
                       setNewButtonActionValue('');
+                      setNewButtonEmojiId('');
                     }}
                     className="btn-secondary flex-1"
                   >
@@ -849,17 +732,23 @@ export default function AdminBroadcastCreate() {
           </div>
 
           {/* Email filter selection */}
-          {renderFilterDropdown(
-            'email',
-            emailTarget,
-            selectedEmailFilter,
-            emailRecipientsCount,
-            showEmailFilters,
-            setShowEmailFilters,
-            handleEmailFilterSelect,
-            groupedEmailFilters,
-            emailFiltersLoading,
-          )}
+          <BroadcastAudienceEditor
+            channel="email"
+            category={category}
+            audience={emailAudience}
+            onChange={setEmailAudience}
+            filters={[
+              ...(emailFiltersData?.filters || []),
+              ...(emailFiltersData?.promo_group_filters || []),
+              ...(emailTariffsData?.tariffs.map((tariff) => ({
+                key: tariff.filter_key,
+                label: tariff.name,
+                tariff_id: tariff.id,
+                count: tariff.active_users_count,
+              })) || []),
+            ]}
+            isLoading={emailFiltersLoading || emailTariffsLoading}
+          />
 
           {/* Email subject */}
           <div>
@@ -911,25 +800,7 @@ export default function AdminBroadcastCreate() {
       )}
 
       {/* Footer */}
-      <div className="card flex items-center justify-between">
-        <div className="text-sm text-dark-400">
-          {(telegramRecipientsCount !== null || emailRecipientsCount !== null) && (
-            <span>
-              {t('admin.broadcasts.willBeSent')}:{' '}
-              {telegramRecipientsCount !== null && (
-                <>
-                  <strong className="text-accent-400">{telegramRecipientsCount}</strong> (TG)
-                </>
-              )}
-              {telegramRecipientsCount !== null && emailRecipientsCount !== null && ' + '}
-              {emailRecipientsCount !== null && (
-                <>
-                  <strong className="text-accent-400">{emailRecipientsCount}</strong> (Email)
-                </>
-              )}
-            </span>
-          )}
-        </div>
+      <div className="card flex items-center justify-end">
         <div className="flex gap-3">
           <button onClick={() => navigate('/admin/broadcasts')} className="btn-secondary">
             {t('common.cancel')}

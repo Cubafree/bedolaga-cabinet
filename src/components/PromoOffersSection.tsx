@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { promoApi, PromoOffer } from '../api/promo';
+import { promoApi, type PromoOffer } from '../api/promo';
+import { getApiErrorMessage } from '../utils/api-error';
 import { ClockIcon, CheckIcon, XCircleIcon } from './icons';
 import { useDestructiveConfirm } from '@/platform/hooks/useNativeDialog';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 // Helper functions
 const formatTimeLeft = (
@@ -111,16 +113,27 @@ export default function PromoOffersSection({ className = '' }: PromoOffersSectio
       setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (error: unknown) => {
-      const axiosErr = error as { response?: { data?: { detail?: string } } };
-      setErrorMessage(axiosErr.response?.data?.detail || t('promo.offers.activationFailed'));
+      setErrorMessage(getApiErrorMessage(error, t('promo.offers.activationFailed')));
       setClaimingId(null);
       setTimeout(() => setErrorMessage(null), 5000);
     },
   });
 
-  // Deactivate discount mutation
+  // Deactivate discount mutation.
+  // A discount granted by a PROMOCODE must be turned off via the dedicated route
+  // (POST /cabinet/promocode/deactivate-discount), which also rolls back the promocode
+  // usage (deletes the PromoCodeUse, decrements current_uses, strips the promo group) so
+  // the user can re-activate it later. The plain clearActiveDiscount route only zeroes
+  // the discount fields and is correct for admin/offer-sourced discounts.
   const deactivateMutation = useMutation({
-    mutationFn: promoApi.clearActiveDiscount,
+    mutationFn: async () => {
+      const source = activeDiscount?.source ?? '';
+      if (source.startsWith('promocode:')) {
+        await promoApi.deactivateDiscount();
+      } else {
+        await promoApi.clearActiveDiscount();
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-discount'] });
       queryClient.invalidateQueries({ queryKey: ['promo-offers'] });
@@ -131,8 +144,14 @@ export default function PromoOffersSection({ className = '' }: PromoOffersSectio
       setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (error: unknown) => {
-      const axiosErr = error as { response?: { data?: { detail?: string } } };
-      setErrorMessage(axiosErr.response?.data?.detail || t('promo.deactivate.error'));
+      // detail may be a plain string (clearActiveDiscount route) or a structured
+      // { code, message } object (deactivate-discount route). Handle both.
+      const axiosErr = error as {
+        response?: { data?: { detail?: string | { message?: string } } };
+      };
+      const detail = axiosErr.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : detail?.message;
+      setErrorMessage(message || t('promo.deactivate.error'));
 
       setTimeout(() => setErrorMessage(null), 5000);
     },
@@ -307,13 +326,13 @@ export default function PromoOffersSection({ className = '' }: PromoOffersSectio
       {/* Loading State */}
       {offersLoading && (
         <div className="card">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 animate-pulse rounded-xl bg-dark-700" />
+          <SkeletonGroup className="flex items-center gap-4">
+            <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
             <div className="flex-1 space-y-2">
-              <div className="h-5 w-32 animate-pulse rounded bg-dark-700" />
-              <div className="h-4 w-48 animate-pulse rounded bg-dark-700" />
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-4 w-48" />
             </div>
-          </div>
+          </SkeletonGroup>
         </div>
       )}
     </div>

@@ -2,14 +2,27 @@ import { useState, useRef, useEffect } from 'react';
 import logger from '../utils/logger';
 import { linkifyText } from '../utils/linkify';
 import { MessageMediaGrid } from '../components/tickets/MessageMediaGrid';
-import { useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { backTo } from '@/components/admin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { adminApi, AdminTicket, AdminTicketDetail } from '../api/admin';
+import { adminApi, type AdminTicket, type AdminTicketDetail } from '../api/admin';
 import { ticketsApi } from '../api/tickets';
 import { copyToClipboard as copyText } from '../utils/clipboard';
 import { usePlatform } from '../platform/hooks/usePlatform';
-import { BackIcon, SettingsIcon, TicketIcon, XIcon } from '@/components/icons';
+import {
+  BackIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  InboxIcon,
+  PaperclipIcon,
+  SettingsIcon,
+  TicketIcon,
+  XCircleIcon,
+  XIcon,
+} from '@/components/icons';
+import { StatCard } from '@/components/stats';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
 
 interface MediaAttachment {
   id: string;
@@ -43,10 +56,30 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 export default function AdminTickets() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { ticketId } = useParams<{ ticketId: string }>();
   const queryClient = useQueryClient();
   const { capabilities } = usePlatform();
 
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+
+  // Deep-link: /admin/tickets/:ticketId (or a startapp param routed here) opens
+  // the given ticket directly — used by the admin-chat notification buttons.
+  // Both routes render the same component instance (no remount), so we mirror the
+  // URL param into the selection: navigating to the bare /admin/tickets list
+  // clears any deep-linked selection, keeping URL and detail pane in sync. (This
+  // only fires on mount or an actual param change, never on in-list clicks, since
+  // ticketId stays undefined on the bare route.)
+  useEffect(() => {
+    if (!ticketId) {
+      setSelectedTicketId(null);
+      return;
+    }
+    const id = Number(ticketId);
+    if (Number.isInteger(id) && id > 0) {
+      setSelectedTicketId(id);
+    }
+  }, [ticketId]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [replyText, setReplyText] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -257,14 +290,12 @@ export default function AdminTickets() {
           {!capabilities.hasBackButton && (
             <button
               onClick={() => navigate('/admin')}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
             >
               <BackIcon />
             </button>
           )}
-          <h1 className="text-2xl font-bold text-dark-50 sm:text-3xl">
-            {t('admin.tickets.title')}
-          </h1>
+          <h1 className="text-xl font-bold text-dark-100">{t('admin.tickets.title')}</h1>
         </div>
         <button
           onClick={() => navigate('/admin/tickets/settings')}
@@ -278,25 +309,37 @@ export default function AdminTickets() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <div className="card text-center">
-            <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">{t('admin.tickets.total')}</div>
-          </div>
-          <div className="card text-center">
-            <div className="stat-value text-accent-400">{stats.open}</div>
-            <div className="stat-label">{t('admin.tickets.statusOpen')}</div>
-          </div>
-          <div className="card text-center">
-            <div className="stat-value text-warning-400">{stats.pending}</div>
-            <div className="stat-label">{t('admin.tickets.statusPending')}</div>
-          </div>
-          <div className="card text-center">
-            <div className="stat-value text-success-400">{stats.answered}</div>
-            <div className="stat-label">{t('admin.tickets.statusAnswered')}</div>
-          </div>
-          <div className="card col-span-2 text-center sm:col-span-1">
-            <div className="stat-value text-dark-400">{stats.closed}</div>
-            <div className="stat-label">{t('admin.tickets.statusClosed')}</div>
+          <StatCard
+            label={t('admin.tickets.total')}
+            value={stats.total}
+            icon={<TicketIcon className="h-5 w-5" />}
+            tone="neutral"
+          />
+          <StatCard
+            label={t('admin.tickets.statusOpen')}
+            value={stats.open}
+            icon={<InboxIcon className="h-5 w-5" />}
+            tone="accent"
+          />
+          <StatCard
+            label={t('admin.tickets.statusPending')}
+            value={stats.pending}
+            icon={<ClockIcon className="h-5 w-5" />}
+            tone="warning"
+          />
+          <StatCard
+            label={t('admin.tickets.statusAnswered')}
+            value={stats.answered}
+            icon={<CheckCircleIcon className="h-5 w-5" />}
+            tone="success"
+          />
+          <div className="col-span-2 sm:col-span-1">
+            <StatCard
+              label={t('admin.tickets.statusClosed')}
+              value={stats.closed}
+              icon={<XCircleIcon className="h-5 w-5" />}
+              tone="neutral"
+            />
           </div>
         </div>
       )}
@@ -323,9 +366,9 @@ export default function AdminTickets() {
           </div>
 
           {ticketsLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-            </div>
+            <SkeletonGroup className="space-y-3">
+              <Skeleton variant="card" count={3} className="h-16" />
+            </SkeletonGroup>
           ) : ticketsData?.items.length === 0 ? (
             <div className="py-12 text-center text-dark-500">{t('admin.tickets.noTickets')}</div>
           ) : (
@@ -428,24 +471,38 @@ export default function AdminTickets() {
             <div className="flex h-full flex-col">
               {/* Header */}
               <div className="mb-4 border-b border-dark-800/50 pb-4">
-                <div className="mb-3 flex items-start justify-between">
-                  <h3 className="text-lg font-semibold text-dark-100">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 basis-48 text-lg font-semibold text-dark-100 [overflow-wrap:anywhere]">
                     #{selectedTicket.id} {selectedTicket.title}
                   </h3>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <span className={getStatusBadge(selectedTicket.status)}>
                       {t(
                         `admin.tickets.status${selectedTicket.status.charAt(0).toUpperCase() + selectedTicket.status.slice(1)}`,
                       )}
                     </span>
                     <span className={getPriorityBadge(selectedTicket.priority)}>
-                      {selectedTicket.priority}
+                      {t(`admin.tickets.priorities.${selectedTicket.priority}`, {
+                        defaultValue: selectedTicket.priority,
+                      })}
                     </span>
                   </div>
                 </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-dark-500">
                   <span>
-                    {t('admin.tickets.from')}: {formatUser(selectedTicket)}
+                    {t('admin.tickets.from')}:{' '}
+                    {selectedTicket.user ? (
+                      <Link
+                        to={`/admin/users/${selectedTicket.user.id}`}
+                        {...backTo(location)}
+                        title={t('admin.tickets.viewUser')}
+                        className="font-medium text-accent-400 underline decoration-accent-400/40 underline-offset-2 transition-colors hover:text-accent-300 hover:decoration-accent-300"
+                      >
+                        {formatUser(selectedTicket)}
+                      </Link>
+                    ) : (
+                      formatUser(selectedTicket)
+                    )}
                     {selectedTicket.user?.telegram_id && (
                       <button
                         onClick={() => copyToClipboard(String(selectedTicket.user!.telegram_id))}
@@ -458,14 +515,6 @@ export default function AdminTickets() {
                     | {t('admin.tickets.created')}:{' '}
                     {new Date(selectedTicket.created_at).toLocaleString()}
                   </span>
-                  {selectedTicket.user && (
-                    <button
-                      onClick={() => navigate(`/admin/users/${selectedTicket.user!.id}`)}
-                      className="shrink-0 rounded-lg border border-accent-500/30 bg-accent-500/10 px-2 py-0.5 text-xs text-accent-400 transition-colors hover:bg-accent-500/20"
-                    >
-                      {t('admin.tickets.viewUser')}
-                    </button>
-                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {['open', 'pending', 'answered', 'closed'].map((s) => (
@@ -512,7 +561,7 @@ export default function AdminTickets() {
                     </div>
                     {msg.message_text && (
                       <p
-                        className="whitespace-pre-wrap text-dark-200 [&_a]:text-accent-400 [&_a]:underline"
+                        className="whitespace-pre-wrap break-words text-dark-200 [&_a]:text-accent-400 [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: linkifyText(msg.message_text) }}
                       />
                     )}
@@ -586,26 +635,14 @@ export default function AdminTickets() {
                     </div>
                   )}
 
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={attachments.length >= 10 || attachments.some((a) => a.uploading)}
                       className="flex items-center gap-2 rounded-lg border border-dark-700/50 px-3 py-2 text-sm text-dark-400 transition-colors hover:border-dark-600 hover:text-dark-200 disabled:opacity-50"
                     >
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
-                        />
-                      </svg>
+                      <PaperclipIcon className="h-4 w-4" />
                       {t('admin.tickets.attachMedia')}{' '}
                       {attachments.length > 0 && `(${attachments.length}/10)`}
                     </button>

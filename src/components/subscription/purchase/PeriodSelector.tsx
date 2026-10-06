@@ -58,7 +58,7 @@ export function PeriodSelector({ periods, value, onChange, className }: PeriodSe
   const formatPrice = (kopeks: number) =>
     kopeks === 0
       ? t('subscription.free', 'Бесплатно')
-      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
+      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
 
   // Always render ascending — the API order is not guaranteed.
   const sorted = [...periods].sort((a, b) => a.days - b.days);
@@ -79,9 +79,7 @@ export function PeriodSelector({ periods, value, onChange, className }: PeriodSe
   };
 
   return (
-    <div
-      className={cn('grid grid-cols-2 gap-2.5 sm:grid-cols-3', className)}
-    >
+    <div className={cn('grid grid-cols-2 gap-2.5 sm:grid-cols-3', className)}>
       {sorted.map((period) => {
         const selected = value === period.days;
         const hasPromo = !!period.discountPercent && period.discountPercent > 0;

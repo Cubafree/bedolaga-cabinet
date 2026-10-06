@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useBranding } from '@/hooks/useBranding';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useScrollRestoration } from '@/hooks/useScrollRestoration';
+import { resetVirtualKeyboard } from '@/hooks/useVirtualKeyboard';
 import { themeColorsApi } from '@/api/themeColors';
 import { isLogoPreloaded } from '@/api/branding';
 import { cn } from '@/lib/utils';
@@ -30,14 +31,13 @@ import {
   ChatIcon,
   UserIcon,
   ShieldIcon,
-  LogoutIcon,
   SunIcon,
   MoonIcon,
 } from '@/components/icons';
 
 import { MobileBottomNav } from './MobileBottomNav';
 import { AppHeader } from './AppHeader';
-import { BackgroundRenderer } from '@/components/backgrounds/BackgroundRenderer';
+import { LogoutButton } from './LogoutButton';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -50,7 +50,7 @@ export function AppShell({ children }: AppShellProps) {
   const logout = useAuthStore((state) => state.logout);
   const { isFullscreen, safeAreaInset, contentSafeAreaInset, platform, isMobile } =
     useTelegramSDK();
-  const { mobile: headerHeight } = useHeaderHeight();
+  const { mobileCss: headerHeight } = useHeaderHeight();
   const haptic = useHaptic();
   const { toggleTheme, isDark } = useTheme();
 
@@ -58,6 +58,8 @@ export function AppShell({ children }: AppShellProps) {
   const { appName, hasCustomLogo, logoUrl } = useBranding();
   const { referralEnabled, wheelEnabled, hasContests, hasPolls, giftEnabled } = useFeatureFlags();
   useScrollRestoration();
+  // Animated background disabled (distracting): AppShell does NOT register
+  // useBackgroundConsumer(), so BackgroundHost in App renders nothing here.
 
   // Theme toggle visibility
   const { data: enabledThemes } = useQuery({
@@ -71,42 +73,19 @@ export function AppShell({ children }: AppShellProps) {
   const isMobileFullscreen = isFullscreen && isMobile;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
-  // Reset keyboard state on route change — prevents bottom nav staying hidden after navigation
+  // Смена экрана закрывает сигнал «клавиатура открыта» (useVirtualKeyboard):
+  // поле с фокусом размонтировано, blur не приходит, и прижатые к низу элементы
+  // иначе остаются спрятанными.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: путь нужен как триггер — сброс на каждой смене экрана
   useEffect(() => {
-    setIsKeyboardOpen(false);
+    resetVirtualKeyboard();
   }, [location.pathname]);
 
-  // Keyboard detection for hiding bottom nav
-  useEffect(() => {
-    const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        setIsKeyboardOpen(true);
-      }
-    };
-
-    const handleFocusOut = (e: FocusEvent) => {
-      const relatedTarget = e.relatedTarget as HTMLElement | null;
-      if (
-        !relatedTarget ||
-        (relatedTarget.tagName !== 'INPUT' &&
-          relatedTarget.tagName !== 'TEXTAREA' &&
-          !relatedTarget.isContentEditable)
-      ) {
-        setIsKeyboardOpen(false);
-      }
-    };
-
-    document.addEventListener('focusin', handleFocusIn);
-    document.addEventListener('focusout', handleFocusOut);
-
-    return () => {
-      document.removeEventListener('focusin', handleFocusIn);
-      document.removeEventListener('focusout', handleFocusOut);
-    };
-  }, []);
+  // Fixed 5-tab spine is visible everywhere except focused checkout, where the
+  // sticky pay bar owns the bottom edge (NOTES_purchase_redesign §3).
+  // data-mobile-nav="off" releases the reserved space (--mobile-nav-clearance).
+  const showMobileNav = !location.pathname.startsWith('/subscription/buy');
 
   // Desktop navigation — fixed 5-tab spine (mirrors the mobile bottom bar).
   // Wheel/Referral/Gift/Info no longer eat nav slots (IA §1.3 / feature matrix HIDE).
@@ -125,8 +104,6 @@ export function AppShell({ children }: AppShellProps) {
 
   // Admin entry hidden from cabinet UI — admins reach /admin by direct URL.
   const ADMIN_NAV_VISIBLE = false;
-  // Animated background disabled (distracting); component kept for easy re-enable.
-  const BACKGROUND_ENABLED = false;
 
   const handleNavClick = () => {
     haptic.impact('light');
@@ -180,10 +157,7 @@ export function AppShell({ children }: AppShellProps) {
   // headerHeight comes from useHeaderHeight() — accounts for TG safe area in fullscreen
 
   return (
-    <div className="min-h-viewport">
-      {/* Animated background renders via portal on document.body at z-index: -1 */}
-      {BACKGROUND_ENABLED && <BackgroundRenderer />}
-
+    <div className="min-h-viewport" data-mobile-nav={showMobileNav ? 'on' : 'off'}>
       {/* Global components */}
       <WebSocketNotifications />
       <CampaignBonusNotifier />
@@ -191,7 +165,11 @@ export function AppShell({ children }: AppShellProps) {
       <PromptDialogHost />
 
       {/* Desktop Header */}
-      <header className="fixed left-0 right-0 top-0 z-50 hidden border-b border-champagne-300 bg-champagne-50 dark:border-dark-800/50 dark:bg-dark-950/95 lg:block">
+      {/* w-screen вместо left-0 right-0: right-0 упирается в край вьюпорта БЕЗ
+          скроллбара, и капсула по центру прыгала бы на полширины скроллбара при
+          переходах между страницами со скроллом и без. 100vw даёт ту же ось
+          центрирования, что и у body (тоже 100vw). */}
+      <header className="fixed left-0 top-0 z-50 hidden w-screen border-b border-champagne-300 bg-champagne-50 dark:border-dark-800/50 dark:bg-dark-950/95 lg:block">
         {/* 3-зонный grid: лого | капсула | действия. Колонки 1fr_auto_1fr держат
             капсулу строго по центру вьюпорта НЕЗАВИСИМО от ширины лого/действий,
             а действия — у правого края. Поэтому ничего не «скачет» при переходах
@@ -257,16 +235,13 @@ export function AppShell({ children }: AppShellProps) {
             </button>
             <TicketNotificationBell isAdmin={location.pathname.startsWith('/admin')} />
             <LanguageSwitcher />
-            <button
-              onClick={() => {
+            <LogoutButton
+              variant="icon"
+              onLogout={() => {
                 haptic.impact('light');
                 logout();
               }}
-              className="rounded-xl border border-dark-700/50 bg-dark-800/50 p-2 text-dark-400 transition-colors duration-200 hover:bg-dark-700 hover:text-accent-400"
-              title={t('nav.logout')}
-            >
-              <LogoutIcon className="h-5 w-5" />
-            </button>
+            />
           </div>
         </div>
       </header>
@@ -295,19 +270,15 @@ export function AppShell({ children }: AppShellProps) {
       <div className="lg:hidden" style={{ height: headerHeight }} />
 
       {/* Main content */}
-      {/* Bottom padding must clear the fixed MobileBottomNav (A1): the bar floats
-          16px above the safe area (bottom: 16px + safe-area) and is ~74px tall, so
-          the flow content it overlays needs 16 + ~74 + a breathing gap + safe-area.
-          pb-28 (112px) was a flat value that ignored env(safe-area-inset-bottom),
-          so on notched phones (~34px) the last row clipped. Use an arbitrary value
-          that adds the safe-area inset on top of the nav footprint; lg has no bottom
-          nav, so lg:pb-8 still wins there. */}
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-[calc(120px+env(safe-area-inset-bottom,0px))] lg:px-6 lg:pb-8">
+      {/* Боковые отступы не меньше вырезов (альбомная ориентация iPhone); снизу —
+          просвет под панелью: фиксированные 112px в standalone iOS не хватало,
+          и низ контента уходил под неё. */}
+      <main className="mx-auto max-w-6xl py-6 pb-[calc(var(--mobile-nav-clearance)+0.5rem)] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] lg:px-6 lg:pb-8">
         {children}
       </main>
 
-      {/* Mobile Bottom Navigation — fixed 5-tab spine */}
-      <MobileBottomNav isKeyboardOpen={isKeyboardOpen} />
+      {/* Mobile Bottom Navigation — fixed 5-tab spine (скрыта только в чекауте) */}
+      {showMobileNav && <MobileBottomNav isMenuOpen={mobileMenuOpen} />}
     </div>
   );
 }

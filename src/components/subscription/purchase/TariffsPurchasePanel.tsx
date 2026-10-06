@@ -8,7 +8,11 @@ import { usePromoDiscount } from '../../../hooks/usePromoDiscount';
 import { useHaptic } from '../../../platform';
 import { useCloseOnSuccessNotification } from '../../../store/successNotification';
 import { getErrorMessage } from '../../../utils/subscriptionHelpers';
-import { savePurchaseCart, loadPurchaseCart, clearPurchaseCart } from '../../../utils/purchaseCartStorage';
+import {
+  savePurchaseCart,
+  loadPurchaseCart,
+  clearPurchaseCart,
+} from '../../../utils/purchaseCartStorage';
 import { SwitchTariffSheet } from '../sheets/SwitchTariffSheet';
 import { PeriodSelector, type PeriodChoice } from './PeriodSelector';
 import { PurchasePayBar } from './PurchasePayBar';
@@ -72,7 +76,7 @@ export function TariffsPurchasePanel({
   const formatPrice = (kopeks: number) =>
     kopeks === 0
       ? t('subscription.free', 'Бесплатно')
-      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
+      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
 
   // ── Buyable tariffs (mirror TariffPickerGrid filters) ───────────
   const buyableTariffs = useMemo(
@@ -183,7 +187,7 @@ export function TariffsPurchasePanel({
       : 0;
 
   const totalKopeks = daily
-    ? selectedTariff?.daily_price_kopeks ?? 0
+    ? (selectedTariff?.daily_price_kopeks ?? 0)
     : (selectedPeriod?.priceKopeks ?? 0) + trafficAddKopeks;
   const originalTotalKopeks =
     !daily && selectedPeriod?.originalKopeks
@@ -194,7 +198,7 @@ export function TariffsPurchasePanel({
   const purchaseMutation = useMutation({
     mutationFn: () => {
       if (!selectedTariff) throw new Error('no tariff');
-      const days = daily ? 1 : selectedDays ?? selectedTariff.periods[0]?.days ?? 30;
+      const days = daily ? 1 : (selectedDays ?? selectedTariff.periods[0]?.days ?? 30);
       const trafficGb = useCustomTraffic && hasCustomTraffic ? customTrafficGb : undefined;
       return subscriptionApi.purchaseTariff(selectedTariff.id, days, trafficGb, subscriptionId);
     },
@@ -233,9 +237,7 @@ export function TariffsPurchasePanel({
   // the wallet covers the total; a surfaced error here is therefore a
   // non-balance failure. (Insufficient-funds races fall back to the
   // server message, which is acceptable for this rare case.)
-  const nonBalanceError = purchaseMutation.isError
-    ? getErrorMessage(purchaseMutation.error)
-    : null;
+  const nonBalanceError = purchaseMutation.isError ? getErrorMessage(purchaseMutation.error) : null;
 
   const handlePay = () => {
     impact('medium');
@@ -245,7 +247,7 @@ export function TariffsPurchasePanel({
   const handleTopUpAndPay = () => {
     impact('medium');
     if (!selectedTariff) return;
-    const days = daily ? 1 : selectedDays ?? selectedTariff.periods[0]?.days ?? 30;
+    const days = daily ? 1 : (selectedDays ?? selectedTariff.periods[0]?.days ?? 30);
     savePurchaseCart({
       mode: 'tariff',
       tariffId: selectedTariff.id,

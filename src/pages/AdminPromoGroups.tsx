@@ -2,16 +2,34 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { promocodesApi, PromoGroup } from '../api/promocodes';
+import { useCurrency } from '../hooks/useCurrency';
+import { promocodesApi, type PromoGroup } from '../api/promocodes';
 import { usePlatform } from '../platform/hooks/usePlatform';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { BackIcon, PlusIcon, EditIcon, TrashIcon, UsersIcon } from '@/components/icons';
+import { usePermissionStore } from '@/store/permissions';
+import {
+  BackIcon,
+  PlusIcon,
+  EditIcon,
+  TrashIcon,
+  UsersIcon,
+  TagIcon,
+  BoltIcon,
+  RefreshIcon,
+} from '@/components/icons';
+import { StatCard } from '@/components/stats';
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/Spinner';
+import { useRecalculation } from './adminPromoGroups/useRecalculation';
 
 export default function AdminPromoGroups() {
   const { t } = useTranslation();
+  const { formatWithCurrency } = useCurrency();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { capabilities } = usePlatform();
+  const canEdit = usePermissionStore((state) => state.hasPermission('promo_groups:edit'));
+  const recalculation = useRecalculation();
 
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const deleteDialogRef = useFocusTrap<HTMLDivElement>(!!deleteConfirm, {
@@ -44,7 +62,7 @@ export default function AdminPromoGroups() {
           {!capabilities.hasBackButton && (
             <button
               onClick={() => navigate('/admin')}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
             >
               <BackIcon />
             </button>
@@ -54,42 +72,70 @@ export default function AdminPromoGroups() {
             <p className="text-sm text-dark-400">{t('admin.promoGroups.subtitle')}</p>
           </div>
         </div>
-        <button
-          onClick={() => navigate('/admin/promo-groups/create')}
-          className="flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2 text-white transition-colors hover:bg-accent-600"
-        >
-          <PlusIcon />
-          {t('admin.promoGroups.addGroup')}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <button
+              type="button"
+              onClick={recalculation.start}
+              disabled={recalculation.isRunning || recalculation.isStarting}
+              title={t('admin.promoGroups.recalculateHint')}
+              className="btn-secondary flex items-center justify-center gap-2"
+            >
+              <RefreshIcon spinning={recalculation.isRunning} />
+              {t('admin.promoGroups.recalculate')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate('/admin/promo-groups/create')}
+            className="btn-primary flex items-center justify-center gap-2"
+          >
+            <PlusIcon />
+            {t('admin.promoGroups.addGroup')}
+          </button>
+        </div>
       </div>
+
+      {/* Пересчёт участников идёт у бота в фоне — показываем, пока не кончится */}
+      {recalculation.isRunning && (
+        <div
+          role="status"
+          className="mb-6 flex items-center gap-2 rounded-xl border border-dark-700 bg-dark-800 px-4 py-3 text-sm text-dark-300"
+        >
+          <Spinner className="h-4 w-4 shrink-0" />
+          {t('admin.promoGroups.recalculating')}
+        </div>
+      )}
 
       {/* Stats */}
       {groups.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-dark-100">{groups.length}</div>
-            <div className="text-xs text-dark-400">{t('admin.promoGroups.stats.total')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-accent-400">
-              {groups.reduce((sum, g) => sum + g.members_count, 0)}
-            </div>
-            <div className="text-xs text-dark-400">{t('admin.promoGroups.stats.members')}</div>
-          </div>
-          <div className="rounded-xl border border-dark-700 bg-dark-800 p-4">
-            <div className="text-2xl font-bold text-warning-400">
-              {groups.filter((g) => g.auto_assign_total_spent_kopeks).length}
-            </div>
-            <div className="text-xs text-dark-400">{t('admin.promoGroups.stats.autoAssign')}</div>
-          </div>
+          <StatCard
+            label={t('admin.promoGroups.stats.total')}
+            value={groups.length}
+            icon={<TagIcon className="h-5 w-5" />}
+            tone="neutral"
+          />
+          <StatCard
+            label={t('admin.promoGroups.stats.members')}
+            value={groups.reduce((sum, g) => sum + g.members_count, 0)}
+            icon={<UsersIcon className="h-5 w-5" />}
+            tone="accent"
+          />
+          <StatCard
+            label={t('admin.promoGroups.stats.autoAssign')}
+            value={groups.filter((g) => g.auto_assign_total_spent_kopeks).length}
+            icon={<BoltIcon className="h-5 w-5" />}
+            tone="warning"
+          />
         </div>
       )}
 
       {/* List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
-        </div>
+        <SkeletonGroup className="space-y-3">
+          <Skeleton variant="card" count={3} className="h-16" />
+        </SkeletonGroup>
       ) : groups.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-dark-400">{t('admin.promoGroups.noGroups')}</p>
@@ -100,10 +146,12 @@ export default function AdminPromoGroups() {
             <div key={group.id} className="rounded-xl border border-dark-700 bg-dark-800 p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2">
-                    <h3 className="font-medium text-dark-100">{group.name}</h3>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <h3 className="min-w-0 font-medium text-dark-100 [overflow-wrap:anywhere]">
+                      {group.name}
+                    </h3>
                     {group.is_default && (
-                      <span className="rounded bg-accent-500/20 px-2 py-0.5 text-xs text-accent-400">
+                      <span className="whitespace-nowrap rounded bg-accent-500/20 px-2 py-0.5 text-xs text-accent-400">
                         {t('admin.promoGroups.default')}
                       </span>
                     )}
@@ -131,17 +179,19 @@ export default function AdminPromoGroups() {
                           {t('admin.promoGroups.daysShort', { days })}: -{percent}%
                         </span>
                       ))}
-                    {group.auto_assign_total_spent_kopeks &&
+                    {group.auto_assign_total_spent_kopeks != null &&
                       group.auto_assign_total_spent_kopeks > 0 && (
                         <span className="text-warning-400">
                           {t('admin.promoGroups.autoFrom', {
-                            amount: group.auto_assign_total_spent_kopeks / 100,
+                            amount: formatWithCurrency(group.auto_assign_total_spent_kopeks / 100),
                           })}
                         </span>
                       )}
                     <span className="flex items-center gap-1">
                       <UsersIcon />
-                      {t('admin.promoGroups.members', { count: group.members_count })}
+                      {t('admin.promoGroups.members', {
+                        count: group.members_count,
+                      })}
                     </span>
                   </div>
                 </div>

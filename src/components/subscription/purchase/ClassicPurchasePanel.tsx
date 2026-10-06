@@ -2,14 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Twemoji from 'react-twemoji';
+import Twemoji from '@/lib/twemoji';
 import { subscriptionApi } from '../../../api/subscription';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { usePromoDiscount } from '../../../hooks/usePromoDiscount';
 import { useHaptic } from '../../../platform';
 import { useCloseOnSuccessNotification } from '../../../store/successNotification';
 import { getErrorMessage } from '../../../utils/subscriptionHelpers';
-import { savePurchaseCart, loadPurchaseCart, clearPurchaseCart } from '../../../utils/purchaseCartStorage';
+import {
+  savePurchaseCart,
+  loadPurchaseCart,
+  clearPurchaseCart,
+} from '../../../utils/purchaseCartStorage';
 import { CheckIcon } from '../../icons';
 import { PeriodSelector, type PeriodChoice } from './PeriodSelector';
 import { PurchasePayBar } from './PurchasePayBar';
@@ -61,7 +65,7 @@ export function ClassicPurchasePanel({
   const formatPrice = (kopeks: number) =>
     kopeks === 0
       ? t('subscription.free', 'Бесплатно')
-      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
+      : `${formatAmount(kopeks / 100)} ${currencySymbol}`;
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null);
   const [selectedTraffic, setSelectedTraffic] = useState<number | null>(null);
@@ -205,10 +209,11 @@ export function ClassicPurchasePanel({
     : null;
   const totalKopeks = promoTotal?.price ?? 0;
   const originalTotalKopeks =
-    promoTotal?.original && promoTotal.original > promoTotal.price ? promoTotal.original : undefined;
+    promoTotal?.original && promoTotal.original > promoTotal.price
+      ? promoTotal.original
+      : undefined;
 
-  const cannotPurchase =
-    !!preview && !preview.can_purchase && preview.missing_amount_kopeks <= 0;
+  const cannotPurchase = !!preview && !preview.can_purchase && preview.missing_amount_kopeks <= 0;
 
   // ── Pay-bar actions ─────────────────────────────────────────────
   const handlePay = () => {
@@ -270,7 +275,10 @@ export function ClassicPurchasePanel({
                   </div>
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                     {selectedPeriod.traffic.options.map((option) => {
-                      const p = applyPromoDiscount(option.price_kopeks, option.original_price_kopeks);
+                      const p = applyPromoDiscount(
+                        option.price_kopeks,
+                        option.original_price_kopeks,
+                      );
                       return (
                         <button
                           key={option.value}
@@ -306,7 +314,10 @@ export function ClassicPurchasePanel({
                   </div>
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     {availableServers.map((server) => {
-                      const p = applyPromoDiscount(server.price_kopeks, server.original_price_kopeks);
+                      const p = applyPromoDiscount(
+                        server.price_kopeks,
+                        server.original_price_kopeks,
+                      );
                       const checked = selectedServers.includes(server.uuid);
                       return (
                         <button
@@ -332,7 +343,9 @@ export function ClassicPurchasePanel({
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate font-medium text-champagne-900 dark:text-dark-100">
-                              <Twemoji options={{ className: 'twemoji', folder: 'svg', ext: '.svg' }}>
+                              <Twemoji
+                                options={{ className: 'twemoji', folder: 'svg', ext: '.svg' }}
+                              >
                                 {server.name}
                               </Twemoji>
                             </span>
@@ -358,7 +371,9 @@ export function ClassicPurchasePanel({
                     <button
                       type="button"
                       onClick={() =>
-                        setSelectedDevices(Math.max(selectedPeriod.devices.min, selectedDevices - 1))
+                        setSelectedDevices(
+                          Math.max(selectedPeriod.devices.min, selectedDevices - 1),
+                        )
                       }
                       disabled={selectedDevices <= selectedPeriod.devices.min}
                       className="flex h-12 w-12 items-center justify-center rounded-full border border-champagne-300 text-2xl text-champagne-900 disabled:opacity-40 dark:border-dark-600 dark:text-dark-100"
@@ -373,7 +388,9 @@ export function ClassicPurchasePanel({
                     <button
                       type="button"
                       onClick={() =>
-                        setSelectedDevices(Math.min(selectedPeriod.devices.max, selectedDevices + 1))
+                        setSelectedDevices(
+                          Math.min(selectedPeriod.devices.max, selectedDevices + 1),
+                        )
                       }
                       disabled={selectedDevices >= selectedPeriod.devices.max}
                       className="flex h-12 w-12 items-center justify-center rounded-full border border-champagne-300 text-2xl text-champagne-900 disabled:opacity-40 dark:border-dark-600 dark:text-dark-100"
@@ -392,10 +409,7 @@ export function ClassicPurchasePanel({
       {preview && preview.breakdown.length > 0 && (
         <div className="space-y-1.5 rounded-2xl border border-champagne-300 bg-champagne-100/60 px-4 py-3 text-[13px] dark:border-dark-700/50 dark:bg-dark-800/40">
           {preview.breakdown.map((item, idx) => (
-            <div
-              key={idx}
-              className="flex justify-between text-champagne-700 dark:text-dark-300"
-            >
+            <div key={idx} className="flex justify-between text-champagne-700 dark:text-dark-300">
               <span>{item.label}</span>
               <span>{item.value}</span>
             </div>

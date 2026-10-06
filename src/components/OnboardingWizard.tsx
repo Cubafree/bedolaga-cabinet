@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PillButton } from '@/components/ui/PillButton';
 import { ShieldIcon, PlayIcon, GiftIcon } from '@/components/icons';
+import { safeLocal } from '@/utils/safeStorage';
 
 const STORAGE_KEY = 'onboarding_wizard_seen';
 
@@ -14,12 +15,10 @@ const STORAGE_KEY = 'onboarding_wizard_seen';
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useOnboardingWizard() {
-  const [isSeen, setIsSeen] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY) === 'true',
-  );
+  const [isSeen, setIsSeen] = useState(() => safeLocal.getItem(STORAGE_KEY) === 'true');
 
   const markSeen = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true');
+    safeLocal.setItem(STORAGE_KEY, 'true');
     setIsSeen(true);
   }, []);
 
@@ -95,9 +94,7 @@ export default function OnboardingWizard({ onTrial, onBuy, onClose }: Onboarding
             <span
               key={s.key}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                idx === step
-                  ? 'w-6 bg-accent-500'
-                  : 'w-1.5 bg-champagne-300 dark:bg-dark-700'
+                idx === step ? 'w-6 bg-accent-500' : 'w-1.5 bg-champagne-300 dark:bg-dark-700'
               }`}
             />
           ))}

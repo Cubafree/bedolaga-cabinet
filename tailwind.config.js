@@ -45,6 +45,12 @@ export default {
           900: withOpacity('--color-champagne-900'),
           950: withOpacity('--color-champagne-950'),
         },
+        // Readable text on top of status-colored fills (computed from the
+        // operator palette in useThemeColors — black or white, whichever reads)
+        'on-accent': withOpacity('--color-on-accent'),
+        'on-success': withOpacity('--color-on-success'),
+        'on-warning': withOpacity('--color-on-warning'),
+        'on-error': withOpacity('--color-on-error'),
         // Accent - dynamic color scheme
         accent: {
           50: withOpacity('--color-accent-50'),
@@ -301,8 +307,14 @@ export default {
     },
   },
   plugins: [
-    function ({ addVariant }) {
+    ({ addVariant }) => {
       addVariant('light', '.light &');
+      // Плитка статистики шире 11rem: чип-иконка рядом со значением. Уже
+      // (две плитки в ряд на телефоне) — маленькая иконка перед подписью,
+      // значению вся ширина.
+      // Решает ширина самой плитки, а не экрана: одна и та же плитка бывает и
+      // в сетке на две колонки, и во всю ширину.
+      addVariant('tile-wide', '@container stat-tile (min-width: 11rem)');
     },
   ],
 };

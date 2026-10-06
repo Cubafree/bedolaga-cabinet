@@ -3,6 +3,7 @@ import { useCurrency } from '../../../hooks/useCurrency';
 import { PillButton } from '../../ui/PillButton';
 import { ArrowRightIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ──────────────────────────────────────────────────────────────────
 // PurchasePayBar  (NOTES_purchase_redesign §3 — the state matrix)
@@ -79,22 +80,21 @@ export function PurchasePayBar({
   const { t } = useTranslation();
   const { formatAmount, currencySymbol } = useCurrency();
 
-  const formatPrice = (kopeks: number) => `${formatAmount(kopeks / 100)} ${currencySymbol}`;
+  const formatPrice = (kopeks: number) => `${formatAmount(kopeks / 100)} ${currencySymbol}`;
 
   const missing = Math.max(0, totalKopeks - balanceKopeks);
   const isFree = !isLoading && totalKopeks === 0;
   const hasEnough = balanceKopeks >= totalKopeks;
   const isZeroBalance = balanceKopeks === 0;
-  const hasStrike =
-    originalTotalKopeks !== undefined && originalTotalKopeks > totalKopeks;
+  const hasStrike = originalTotalKopeks !== undefined && originalTotalKopeks > totalKopeks;
 
   // ── Left column (total / «не хватает» / «доплата» / «бесплатно») ──
   const renderLeft = () => {
     if (isLoading) {
       return (
         <div className="space-y-1.5">
-          <div className="h-3 w-12 animate-pulse rounded bg-champagne-300/60 dark:bg-dark-700" />
-          <div className="h-5 w-20 animate-pulse rounded bg-champagne-300/60 dark:bg-dark-700" />
+          <Skeleton className="h-3 w-12 rounded" />
+          <Skeleton className="h-5 w-20 rounded" />
         </div>
       );
     }
@@ -181,7 +181,11 @@ export function PurchasePayBar({
 
     if (isSwitch) {
       return (
-        <PillButton variant="primary" onClick={onSwitch} trailingIcon={<ArrowRightIcon className="h-4 w-4" />}>
+        <PillButton
+          variant="primary"
+          onClick={onSwitch}
+          trailingIcon={<ArrowRightIcon className="h-4 w-4" />}
+        >
           {t('subscription.pay.switch', 'Перейти на тариф')}
         </PillButton>
       );
@@ -189,7 +193,11 @@ export function PurchasePayBar({
 
     if (isFree) {
       return (
-        <PillButton variant="primary" onClick={onPay} trailingIcon={<ArrowRightIcon className="h-4 w-4" />}>
+        <PillButton
+          variant="primary"
+          onClick={onPay}
+          trailingIcon={<ArrowRightIcon className="h-4 w-4" />}
+        >
           {t('subscription.pay.connect', 'Подключить')}
         </PillButton>
       );
@@ -197,7 +205,11 @@ export function PurchasePayBar({
 
     if (hasEnough) {
       return (
-        <PillButton variant="primary" onClick={onPay} trailingIcon={<ArrowRightIcon className="h-4 w-4" />}>
+        <PillButton
+          variant="primary"
+          onClick={onPay}
+          trailingIcon={<ArrowRightIcon className="h-4 w-4" />}
+        >
           {t('subscription.pay.payFromBalance', {
             amount: formatPrice(totalKopeks),
             defaultValue: 'Оплатить {{amount}} с баланса',
@@ -237,13 +249,7 @@ export function PurchasePayBar({
         <div className="mb-2 text-center text-[13px] text-error-500">{errorMessage}</div>
       )}
 
-      <div
-        className={cn(
-          variant === 'rail'
-            ? 'flex flex-col gap-3'
-            : 'flex items-center gap-4',
-        )}
-      >
+      <div className={cn(variant === 'rail' ? 'flex flex-col gap-3' : 'flex items-center gap-4')}>
         <div className={cn(variant === 'rail' ? '' : 'shrink-0')}>{renderLeft()}</div>
         <div className={cn(variant === 'rail' ? '' : 'min-w-0 flex-1')}>{renderButton()}</div>
       </div>

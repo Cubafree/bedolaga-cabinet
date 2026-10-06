@@ -18,6 +18,7 @@ import {
   GiftIcon,
   PowerIcon,
 } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const LANGS: { code: string; label: string }[] = [
   { code: 'ru', label: 'РУС' },
@@ -192,7 +193,7 @@ export default function AccountHub() {
                 {t('account.devices.title')}
               </div>
               {devicesLoading ? (
-                <div className="mt-1 h-3 w-24 animate-pulse rounded bg-champagne-200 dark:bg-dark-800" />
+                <Skeleton className="mt-1 h-3 w-24 rounded" />
               ) : deviceCount !== undefined ? (
                 <div className="mt-0.5 text-[13px] text-champagne-600 dark:text-dark-400">
                   {t('account.devices.connected', { n: deviceCount })}

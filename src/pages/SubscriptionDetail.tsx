@@ -33,6 +33,8 @@ import { DeviceReductionSheet } from '../components/subscription/sheets/DeviceRe
 import { TrafficTopupSheet } from '../components/subscription/sheets/TrafficTopupSheet';
 import { ServerManagementSheet } from '../components/subscription/sheets/ServerManagementSheet';
 import { DeleteSubscriptionSheet } from '../components/subscription/sheets/DeleteSubscriptionSheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { safeLocal } from '@/utils/safeStorage';
 
 /**
  * Подписка — details «моя подписка» (NOTES_IA §3.3, copy spec §C).
@@ -93,7 +95,11 @@ export default function SubscriptionDetail() {
   });
   const isMultiTariff = multiSubData?.multi_tariff_enabled ?? false;
 
-  const { data: subscriptionResponse, isLoading, isError } = useQuery({
+  const {
+    data: subscriptionResponse,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['subscription', subscriptionId],
     queryFn: () => subscriptionApi.getSubscription(subscriptionId),
     retry: false,
@@ -166,7 +172,7 @@ export default function SubscriptionDetail() {
       queryClient.invalidateQueries({ queryKey: ['subscriptions-list'] });
       queryClient.invalidateQueries({ queryKey: ['devices', subscriptionId] });
       haptic.notification('success');
-      localStorage.setItem(`revoke_ts_${subscriptionId ?? 'default'}`, Date.now().toString());
+      safeLocal.setItem(`revoke_ts_${subscriptionId ?? 'default'}`, Date.now().toString());
       setRevokeCooldown(900);
     },
     onError: () => haptic.notification('error'),
@@ -174,7 +180,7 @@ export default function SubscriptionDetail() {
 
   // Init + tick revoke cooldown from localStorage (15 min window).
   useEffect(() => {
-    const ts = localStorage.getItem(`revoke_ts_${subscriptionId ?? 'default'}`);
+    const ts = safeLocal.getItem(`revoke_ts_${subscriptionId ?? 'default'}`);
     if (ts) {
       const elapsed = Math.floor((Date.now() - parseInt(ts, 10)) / 1000);
       setRevokeCooldown(Math.max(0, 900 - elapsed));
@@ -225,9 +231,9 @@ export default function SubscriptionDetail() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="skeleton h-8 w-40 rounded-lg" />
-        <div className="skeleton h-48 w-full rounded-4xl" />
-        <div className="skeleton h-32 w-full rounded-bento" />
+        <Skeleton className="h-8 w-40 rounded-lg" />
+        <Skeleton variant="card" className="h-48 w-full rounded-4xl" />
+        <Skeleton variant="card" className="h-32 w-full rounded-bento" />
       </div>
     );
   }
@@ -495,7 +501,10 @@ export default function SubscriptionDetail() {
           <div className="mb-4 font-mono text-[11px] text-champagne-600 dark:text-dark-400">
             {deviceLimit === 0
               ? t('subscription.details.devices.subtitleUnlimited', { n: connectedDevices })
-              : t('subscription.details.devices.subtitle', { n: connectedDevices, max: deviceLimit })}
+              : t('subscription.details.devices.subtitle', {
+                  n: connectedDevices,
+                  max: deviceLimit,
+                })}
           </div>
 
           {devicesLoading ? (

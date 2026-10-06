@@ -5,13 +5,15 @@ import {
   hideBackButton,
   onBackButtonClick,
   offBackButtonClick,
+  retrieveLaunchParams,
 } from '@telegram-apps/sdk-react';
 import { useQuery } from '@tanstack/react-query';
-import Twemoji from 'react-twemoji';
+import Twemoji from '@/lib/twemoji';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PlatformProvider } from './platform/PlatformProvider';
 import { ThemeColorsProvider } from './providers/ThemeColorsProvider';
+import { DocumentBranding } from './components/DocumentBranding';
 import { WebSocketProvider } from './providers/WebSocketProvider';
 import { ToastProvider } from './components/Toast';
 import { TooltipProvider } from './components/primitives/Tooltip';
@@ -172,15 +174,67 @@ function TelegramBackButton() {
   return null;
 }
 
+/** Supported startapp params → in-app destinations. */
+const START_PARAM_ROUTES: Array<{ re: RegExp; to: (match: RegExpExecArray) => string }> = [
+  // Admin ticket notification buttons in group chats (bot issue #2988).
+  { re: /^admin_ticket_(\d+)$/, to: (match) => `/admin/tickets/${match[1]}` },
+  // «Продлить» links for expired subscriptions in the bot's rich main menu.
+  { re: /^renew_(\d+)$/, to: (match) => `/subscriptions/${match[1]}/renew` },
+  { re: /^subscriptions$/, to: () => '/subscriptions' },
+  // Paid-trial «Активировать триал» link in the bot's rich main menu — the
+  // dashboard renders TrialOfferCard with the pay-and-activate flow.
+  { re: /^trial$/, to: () => '/' },
+];
+
+/**
+ * Routes a Telegram Mini App start param to an in-app destination on launch.
+ *
+ * Text links and buttons outside private-chat web_app buttons can only enter the
+ * Mini App via `t.me/<bot>/<app>?startapp=<param>` deep links: admin ticket
+ * notifications in GROUP/channel chats (bot issue #2988) and the bot's rich
+ * main-menu «Продлить» links for expired subscriptions. Telegram delivers the
+ * param as `tgWebAppStartParam`; we map it to a route once on mount. Access is
+ * still gated by each route's own guards (e.g. `PermissionRoute`).
+ */
+function StartParamNavigator() {
+  const navigate = useNavigate();
+  const handled = useRef(false);
+
+  useEffect(() => {
+    if (handled.current) return;
+    handled.current = true;
+
+    let startParam: string | undefined;
+    try {
+      startParam = retrieveLaunchParams().tgWebAppStartParam;
+    } catch {
+      return;
+    }
+    if (!startParam) return;
+
+    for (const { re, to } of START_PARAM_ROUTES) {
+      const match = re.exec(startParam);
+      if (match) {
+        navigate(to(match), { replace: true });
+        return;
+      }
+    }
+  }, [navigate]);
+
+  return null;
+}
+
 export function AppWithNavigator() {
   const isTelegram = isInTelegramWebApp();
 
   return (
     <BrowserRouter>
       {isTelegram && <TelegramBackButton />}
+      {isTelegram && <StartParamNavigator />}
       <ErrorBoundary level="page">
         <PlatformProvider>
           <ThemeColorsProvider>
+            <DocumentBranding />
             <TooltipProvider>
               <ToastProvider>
                 <WebSocketProvider>

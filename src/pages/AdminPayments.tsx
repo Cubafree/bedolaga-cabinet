@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
+import { backTo } from '@/components/admin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { METHOD_LABELS } from '../constants/paymentMethods';
 import { adminPaymentsApi, type SearchStats } from '../api/adminPayments';
 import { DateField } from '../components/DateField';
 import { useCurrency } from '../hooks/useCurrency';
 import type { PendingPayment, PaginatedResponse } from '../types';
 import { usePlatform } from '../platform/hooks/usePlatform';
+import { StatCard } from '@/components/stats';
 import {
   BackIcon,
   SearchIcon,
   CalendarIcon,
   RefreshIcon,
   CheckCircleIcon,
+  ChartBarIcon,
+  ClockIcon,
+  XCircleIcon,
 } from '@/components/icons';
 
 interface StatusBadgeProps {
@@ -38,41 +44,10 @@ function StatusBadge({ status }: StatusBadgeProps) {
   );
 }
 
-interface StatCardProps {
-  label: string;
-  value: number;
-  color: 'blue' | 'amber' | 'green' | 'red';
-  isActive: boolean;
-  onClick: () => void;
-}
-
-function StatCard({ label, value, color, isActive, onClick }: StatCardProps) {
-  const colors: Record<string, string> = {
-    blue: 'border-accent-500/30 bg-accent-500/20 text-accent-400',
-    amber: 'border-warning-500/30 bg-warning-500/20 text-warning-400',
-    green: 'border-success-500/30 bg-success-500/20 text-success-400',
-    red: 'border-error-500/30 bg-error-500/20 text-error-400',
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border p-4 text-left transition-all ${
-        isActive
-          ? colors[color]
-          : 'border-dark-700/50 bg-dark-800/50 text-dark-300 hover:border-dark-600'
-      }`}
-    >
-      <div className={`text-2xl font-bold ${isActive ? '' : 'text-dark-50'}`}>{value}</div>
-      <div className="text-sm opacity-80">{label}</div>
-    </button>
-  );
-}
-
 export default function AdminPayments() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { formatAmount, currencySymbol } = useCurrency();
   const { capabilities } = usePlatform();
@@ -206,13 +181,13 @@ export default function AdminPayments() {
           {!capabilities.hasBackButton && (
             <button
               onClick={() => navigate('/admin')}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dark-700 bg-dark-800 transition-colors hover:border-dark-600"
             >
               <BackIcon />
             </button>
           )}
           <div>
-            <h1 className="text-xl font-semibold text-dark-100">{t('admin.payments.title')}</h1>
+            <h1 className="text-xl font-bold text-dark-100">{t('admin.payments.title')}</h1>
             <p className="text-sm text-dark-400">{t('admin.payments.description')}</p>
           </div>
         </div>
@@ -267,7 +242,7 @@ export default function AdminPayments() {
               onClick={() => setStatusFilter(option.value)}
               className={`rounded-lg px-3 py-1.5 text-sm transition-all ${
                 statusFilter === option.value
-                  ? 'bg-accent-500 text-white'
+                  ? 'bg-accent-500 text-on-accent'
                   : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
               }`}
             >
@@ -284,7 +259,7 @@ export default function AdminPayments() {
               onClick={() => handlePeriodChange(option.value)}
               className={`rounded-lg px-3 py-1.5 text-sm transition-all ${
                 periodFilter === option.value
-                  ? 'bg-accent-500 text-white'
+                  ? 'bg-accent-500 text-on-accent'
                   : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
               }`}
             >
@@ -295,7 +270,7 @@ export default function AdminPayments() {
             onClick={() => handlePeriodChange('custom')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all ${
               periodFilter === 'custom'
-                ? 'bg-accent-500 text-white'
+                ? 'bg-accent-500 text-on-accent'
                 : 'bg-dark-800 text-dark-300 hover:bg-dark-700'
             }`}
           >
@@ -313,7 +288,7 @@ export default function AdminPayments() {
               <option value="">{t('admin.payments.allMethods')}</option>
               {methodOptions.map((method) => (
                 <option key={method} value={method}>
-                  {method}
+                  {METHOD_LABELS[method] ?? method}
                 </option>
               ))}
             </select>
@@ -324,7 +299,7 @@ export default function AdminPayments() {
       {/* Date range panel */}
       {showDateRange && (
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-accent-500/30 bg-accent-500/5 p-4">
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label className="mb-1 block text-xs text-dark-400">
               {t('admin.payments.dateFrom')}
             </label>
@@ -335,7 +310,7 @@ export default function AdminPayments() {
               className="flex w-full items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 py-2 text-sm text-dark-100 transition-colors hover:border-accent-500"
             />
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label className="mb-1 block text-xs text-dark-400">{t('admin.payments.dateTo')}</label>
             <DateField
               value={dateTo}
@@ -353,34 +328,62 @@ export default function AdminPayments() {
       {/* Stats cards */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label={t('admin.payments.totalCount')}
-            value={stats.total}
-            color="blue"
-            isActive={statusFilter === 'all'}
+          <button
+            type="button"
             onClick={() => handleStatusCardClick('all')}
-          />
-          <StatCard
-            label={t('admin.payments.pendingCount')}
-            value={stats.pending}
-            color="amber"
-            isActive={statusFilter === 'pending'}
+            className={`rounded-xl text-left transition-all ${
+              statusFilter === 'all' ? 'ring-2 ring-accent-500' : ''
+            }`}
+          >
+            <StatCard
+              label={t('admin.payments.totalCount')}
+              value={stats.total}
+              icon={<ChartBarIcon className="h-5 w-5" />}
+              tone="accent"
+            />
+          </button>
+          <button
+            type="button"
             onClick={() => handleStatusCardClick('pending')}
-          />
-          <StatCard
-            label={t('admin.payments.paidCount')}
-            value={stats.paid}
-            color="green"
-            isActive={statusFilter === 'paid'}
+            className={`rounded-xl text-left transition-all ${
+              statusFilter === 'pending' ? 'ring-2 ring-warning-500' : ''
+            }`}
+          >
+            <StatCard
+              label={t('admin.payments.pendingCount')}
+              value={stats.pending}
+              icon={<ClockIcon className="h-5 w-5" />}
+              tone="warning"
+            />
+          </button>
+          <button
+            type="button"
             onClick={() => handleStatusCardClick('paid')}
-          />
-          <StatCard
-            label={t('admin.payments.cancelledCount')}
-            value={stats.cancelled}
-            color="red"
-            isActive={statusFilter === 'cancelled'}
+            className={`rounded-xl text-left transition-all ${
+              statusFilter === 'paid' ? 'ring-2 ring-success-500' : ''
+            }`}
+          >
+            <StatCard
+              label={t('admin.payments.paidCount')}
+              value={stats.paid}
+              icon={<CheckCircleIcon className="h-5 w-5" />}
+              tone="success"
+            />
+          </button>
+          <button
+            type="button"
             onClick={() => handleStatusCardClick('cancelled')}
-          />
+            className={`rounded-xl text-left transition-all ${
+              statusFilter === 'cancelled' ? 'ring-2 ring-error-500' : ''
+            }`}
+          >
+            <StatCard
+              label={t('admin.payments.cancelledCount')}
+              value={stats.cancelled}
+              icon={<XCircleIcon className="h-5 w-5" />}
+              tone="error"
+            />
+          </button>
         </div>
       )}
 
@@ -410,7 +413,7 @@ export default function AdminPayments() {
                   className="rounded-xl border border-dark-700/30 bg-dark-800/30 p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 basis-60">
                       {/* Status badge + method */}
                       <div className="mb-2 flex flex-wrap items-center gap-2">
                         <StatusBadge status={payment.status_text} />
@@ -430,12 +433,16 @@ export default function AdminPayments() {
                           isCancelled ? 'text-dark-500 line-through opacity-60' : 'text-dark-50'
                         }`}
                       >
-                        {formatAmount(payment.amount_rubles)} {currencySymbol}
+                        {formatAmount(payment.amount_rubles)}
+                        {'\u00A0'}
+                        {currencySymbol}
                       </div>
 
                       {/* Invoice ID */}
                       <div className="mt-1 text-sm text-dark-400">
-                        <code className="font-mono text-accent-400">{payment.identifier}</code>
+                        <code className="font-mono text-accent-400 break-all">
+                          {payment.identifier}
+                        </code>
                       </div>
 
                       {/* User info */}
@@ -448,9 +455,9 @@ export default function AdminPayments() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/admin/users/${payment.user_id}`);
+                                navigate(`/admin/users/${payment.user_id}`, backTo(location));
                               }}
-                              className="inline-flex items-center gap-1 transition-colors hover:underline"
+                              className="inline-flex max-w-full flex-wrap items-center gap-x-1 text-left transition-colors [overflow-wrap:anywhere] hover:underline"
                             >
                               {payment.user_username && (
                                 <span className="text-accent-400">@{payment.user_username}</span>
@@ -497,7 +504,7 @@ export default function AdminPayments() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2 sm:flex-col">
                       {payment.payment_url && (
                         <a
                           href={payment.payment_url}

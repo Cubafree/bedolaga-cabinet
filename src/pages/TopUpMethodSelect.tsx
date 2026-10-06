@@ -12,6 +12,7 @@ import {
 import { Kicker } from '@/components/ui/Kicker';
 import { WebBackButton } from '../components/WebBackButton';
 import { CardIcon, CryptoIcon, StarIcon, ChevronRightIcon, WalletIcon } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /** Type-level glyph (never a brand mark). */
 function MethodGlyph({ kind, className }: { kind: string | null; className?: string }) {
@@ -55,7 +56,7 @@ export default function TopUpMethodSelect() {
       {isLoading ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="skeleton h-20 w-full rounded-bento" />
+            <Skeleton key={i} variant="card" className="h-20 w-full rounded-bento" />
           ))}
         </div>
       ) : !paymentMethods || paymentMethods.length === 0 ? (
@@ -90,7 +91,7 @@ export default function TopUpMethodSelect() {
                   )}
                   <div className="mt-1 font-mono text-[11px] text-champagne-500 dark:text-dark-400">
                     {formatAmount(method.min_amount_kopeks / 100, 0)} –{' '}
-                    {formatAmount(method.max_amount_kopeks / 100, 0)} {currencySymbol}
+                    {formatAmount(method.max_amount_kopeks / 100, 0)} {currencySymbol}
                   </div>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 shrink-0 text-champagne-400" />

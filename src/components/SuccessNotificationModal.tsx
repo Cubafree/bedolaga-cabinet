@@ -3,6 +3,8 @@
  * Shows prominent success messages for balance top-ups and subscription purchases.
  */
 
+import { uiLocale } from '@/utils/uiLocale';
+import { formatDateOrRaw } from '@/utils/format';
 import { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -85,23 +87,21 @@ export default function SuccessNotificationModal() {
 
   // Format amount
   const formattedAmount = data.amountKopeks
-    ? `${formatAmount(data.amountKopeks / 100)} ${currencySymbol}`
+    ? `${formatAmount(data.amountKopeks / 100)}\u00A0${currencySymbol}`
     : null;
 
   // Format new balance
   const formattedBalance =
     data.newBalanceKopeks !== undefined
-      ? `${formatAmount(data.newBalanceKopeks / 100)} ${currencySymbol}`
+      ? `${formatAmount(data.newBalanceKopeks / 100)}\u00A0${currencySymbol}`
       : null;
 
   // Format expiry date
-  const formattedExpiry = data.expiresAt
-    ? new Date(data.expiresAt).toLocaleDateString(undefined, {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : null;
+  const formattedExpiry = formatDateOrRaw(data.expiresAt, uiLocale(), {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   // Determine title and message
   let title = data.title;
@@ -231,7 +231,9 @@ export default function SuccessNotificationModal() {
               <span className="text-dark-400">
                 {t('successNotification.trafficAdded', 'Traffic added')}
               </span>
-              <span className="text-lg font-bold text-success-400">+{data.trafficGbAdded} GB</span>
+              <span className="text-lg font-bold text-success-400">
+                +{data.trafficGbAdded} {t('common.units.gb', 'GB')}
+              </span>
             </div>
           )}
 
@@ -240,7 +242,9 @@ export default function SuccessNotificationModal() {
               <span className="text-dark-400">
                 {t('successNotification.totalTraffic', 'Total traffic')}
               </span>
-              <span className="font-semibold text-dark-100">{data.newTrafficLimitGb} GB</span>
+              <span className="font-semibold text-dark-100">
+                {data.newTrafficLimitGb} {t('common.units.gb', 'GB')}
+              </span>
             </div>
           )}
 
@@ -281,7 +285,7 @@ export default function SuccessNotificationModal() {
             {isSubscription && (
               <button
                 onClick={handleGoToSubscription}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3.5 font-bold text-white shadow-lg shadow-accent-500/25 transition-colors hover:bg-accent-400 active:bg-accent-600"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3.5 font-bold text-on-accent shadow-lg shadow-accent-500/25 transition-colors hover:bg-accent-400 active:bg-accent-600"
               >
                 <RocketIcon className="h-8 w-8" />
                 <span>{t('successNotification.goToSubscription', 'Go to Subscription')}</span>
@@ -301,7 +305,7 @@ export default function SuccessNotificationModal() {
             {isDevicesPurchased && (
               <button
                 onClick={handleGoToSubscription}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3.5 font-bold text-white shadow-lg shadow-accent-500/25 transition-colors hover:bg-accent-400 active:bg-accent-600"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3.5 font-bold text-on-accent shadow-lg shadow-accent-500/25 transition-colors hover:bg-accent-400 active:bg-accent-600"
               >
                 <DevicesIcon className="h-8 w-8" />
                 <span>{t('successNotification.goToSubscription', 'Go to Subscription')}</span>

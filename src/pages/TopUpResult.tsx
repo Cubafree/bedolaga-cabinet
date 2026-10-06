@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -13,6 +13,7 @@ import { AnimatedCheckmark } from '@/components/ui/AnimatedCheckmark';
 import { AnimatedCrossmark } from '@/components/ui/AnimatedCrossmark';
 import { loadTopUpPendingInfo, clearTopUpPendingInfo } from '../utils/topUpStorage';
 import { isPaidStatus, isFailedStatus } from '../utils/paymentStatus';
+import { ClockIcon } from '@/components/icons';
 
 // ── Constants ────────────────────────────────────────────────
 const MAX_POLL_MS = 10 * 60 * 1000; // 10 minutes
@@ -41,7 +42,7 @@ function PendingState({ amountKopeks }: { amountKopeks: number | null }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center gap-6 text-center"
+      className="flex flex-col items-center gap-6 text-center [overflow-wrap:anywhere]"
     >
       <Spinner className="h-16 w-16 border-[3px]" />
       <div>
@@ -69,7 +70,7 @@ function SuccessState({ amountKopeks }: { amountKopeks: number | null }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center gap-6 text-center"
+      className="flex flex-col items-center gap-6 text-center [overflow-wrap:anywhere]"
     >
       <AnimatedCheckmark />
 
@@ -85,7 +86,7 @@ function SuccessState({ amountKopeks }: { amountKopeks: number | null }) {
       <button
         type="button"
         onClick={handleGoToBalance}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-400"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3 text-sm font-medium text-on-accent transition-colors hover:bg-accent-400"
       >
         {t('balance.topUpResult.goToBalance')}
       </button>
@@ -105,7 +106,7 @@ function FailedState({ amountKopeks }: { amountKopeks: number | null }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center gap-6 text-center"
+      className="flex flex-col items-center gap-6 text-center [overflow-wrap:anywhere]"
     >
       <AnimatedCrossmark />
 
@@ -136,23 +137,10 @@ function TimeoutState({ onRetry, onGoBack }: { onRetry: () => void; onGoBack: ()
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center gap-6 text-center"
+      className="flex flex-col items-center gap-6 text-center [overflow-wrap:anywhere]"
     >
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-dark-800/50">
-        <svg
-          className="h-10 w-10 text-dark-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
+        <ClockIcon className="h-10 w-10 text-dark-400" />
       </div>
       <div>
         <h1 className="text-xl font-bold text-dark-50">{t('balance.topUpResult.timeout')}</h1>
@@ -162,7 +150,7 @@ function TimeoutState({ onRetry, onGoBack }: { onRetry: () => void; onGoBack: ()
         <button
           type="button"
           onClick={onRetry}
-          className="w-full rounded-xl bg-accent-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-400"
+          className="w-full rounded-xl bg-accent-500 px-6 py-3 text-sm font-medium text-on-accent transition-colors hover:bg-accent-400"
         >
           {t('common.retry')}
         </button>
@@ -194,8 +182,11 @@ export default function TopUpResult() {
   // Load saved payment info from sessionStorage (once on mount)
   const [pendingInfo] = useState(() => loadTopUpPendingInfo());
 
-  // Fallback: read method from query params (for external browser redirects where sessionStorage is unavailable)
-  const methodFromUrl = searchParams.get('method');
+  // Fallback: read method for external-browser redirects where sessionStorage is unavailable.
+  // Providers that reject query strings (Lava) return to /balance/top-up/result/<method>, so
+  // accept the method from the path param too, not just ?method=.
+  const { method: methodFromPath } = useParams<{ method?: string }>();
+  const methodFromUrl = searchParams.get('method') || methodFromPath || null;
 
   // Detect if user arrived via redirect with success param (no polling needed)
   const redirectStatus = searchParams.get('status') || searchParams.get('payment');

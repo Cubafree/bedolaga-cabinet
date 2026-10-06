@@ -77,11 +77,8 @@ export function loadPurchaseCart(): PurchaseCart | null {
       tariffId: typeof parsed.tariffId === 'number' ? parsed.tariffId : undefined,
       periodDays: typeof parsed.periodDays === 'number' ? parsed.periodDays : undefined,
       trafficGb: typeof parsed.trafficGb === 'number' ? parsed.trafficGb : undefined,
-      selection: isRecord(parsed.selection)
-        ? (parsed.selection as PurchaseSelection)
-        : undefined,
-      subscriptionId:
-        typeof parsed.subscriptionId === 'number' ? parsed.subscriptionId : undefined,
+      selection: isRecord(parsed.selection) ? (parsed.selection as PurchaseSelection) : undefined,
+      subscriptionId: typeof parsed.subscriptionId === 'number' ? parsed.subscriptionId : undefined,
       totalKopeks: parsed.totalKopeks,
       savedAt: parsed.savedAt,
     };

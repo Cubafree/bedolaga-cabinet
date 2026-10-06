@@ -1,3 +1,4 @@
+import { uiLocale } from '@/utils/uiLocale';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -139,22 +140,33 @@ export default function Balance() {
         queryClient.invalidateQueries({ queryKey: ['subscriptions-list'] });
       }
     } catch (error: unknown) {
-      const axiosError = error as { response?: { data?: { detail?: string } } };
-      const errorDetail = axiosError.response?.data?.detail || 'server_error';
-      const detail = errorDetail.toLowerCase();
-      const errorKey = detail.includes('not found')
-        ? 'not_found'
-        : detail.includes('deactivated')
-          ? 'inactive'
-          : detail.includes('not yet active')
-            ? 'not_yet_valid'
-            : detail.includes('expired')
-              ? 'expired'
-              : detail.includes('fully used')
-                ? 'used'
-                : detail.includes('already used')
-                  ? 'already_used_by_user'
-                  : 'server_error';
+      // Backend returns a structured error: detail = { code, message }. We map
+      // the stable machine code to a localized string. (The old contract
+      // substring-matched English prose and silently degraded every unmapped
+      // code — active_discount_exists, daily_limit, … — to "server error".)
+      const axiosError = error as {
+        response?: { data?: { detail?: { code?: string } | string } };
+      };
+      const detail = axiosError.response?.data?.detail;
+      const code = typeof detail === 'object' && detail ? detail.code : undefined;
+      const knownErrorKeys = [
+        'not_found',
+        'expired',
+        'inactive',
+        'not_yet_valid',
+        'used',
+        'already_used_by_user',
+        'active_discount_exists',
+        'no_subscription_for_days',
+        'subscription_not_found',
+        'not_first_purchase',
+        'daily_limit',
+        'trial_subscription_exists',
+        'trial_provisioning_failed',
+        'user_not_found',
+        'server_error',
+      ];
+      const errorKey = code && knownErrorKeys.includes(code) ? code : 'server_error';
       setPromocodeError(t(`balance.promocode.errors.${errorKey}`));
       setPromoSelectSubs(null);
       setPromoSelectCode(null);
@@ -316,7 +328,7 @@ export default function Balance() {
                           {getTypeLabel(tx.type)}
                         </div>
                         <div className="mt-0.5 font-mono text-[11px] text-champagne-500 dark:text-dark-400">
-                          {new Date(tx.created_at).toLocaleDateString()}
+                          {new Date(tx.created_at).toLocaleDateString(uiLocale())}
                         </div>
                         {tx.description && (
                           <div className="mt-0.5 truncate text-[12px] text-champagne-600 dark:text-dark-400">
@@ -326,7 +338,7 @@ export default function Balance() {
                       </div>
                       <div className={`text-base font-bold ${colorClass}`}>
                         {sign}
-                        {formatAmount(displayAmount)} {currencySymbol}
+                        {formatAmount(displayAmount)} {currencySymbol}
                       </div>
                     </div>
                   );
