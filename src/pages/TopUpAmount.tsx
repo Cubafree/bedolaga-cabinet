@@ -9,7 +9,11 @@ import { useCurrency } from '../hooks/useCurrency';
 import { checkRateLimit, getRateLimitResetTime, RATE_LIMIT_KEYS } from '../utils/rateLimit';
 import { useCloseOnSuccessNotification } from '../store/successNotification';
 import { useHaptic, usePlatform } from '@/platform';
-import { classifyPaymentMethod, humanPaymentMethodLabel } from '../utils/paymentMethodLabel';
+import {
+  buildPaymentMethodDisplay,
+  classifyPaymentMethod,
+  humanPaymentMethodLabel,
+} from '../utils/paymentMethodLabel';
 import type { PaymentMethod, PaymentMethodOption } from '../types';
 import { Kicker } from '@/components/ui/Kicker';
 import { PillButton } from '@/components/ui/PillButton';
@@ -233,7 +237,9 @@ export default function TopUpAmount() {
         // Save payment info for the result page (do BEFORE possible redirect,
         // иначе после window.location.href этот код не выполнится).
         if (method && data.payment_id) {
-          const displayName = humanPaymentMethodLabel(method);
+          const displayName =
+            buildPaymentMethodDisplay(methods ?? []).get(method.id)?.label ??
+            humanPaymentMethodLabel(method);
           saveTopUpPendingInfo({
             amount_kopeks: data.amount_kopeks,
             method_id: method.id,
@@ -318,7 +324,9 @@ export default function TopUpAmount() {
   const methodKey = method.id.toLowerCase().replace(/-/g, '_');
   const methodKind = classifyPaymentMethod(method);
   const isStarsMethod = methodKind === 'stars' || methodKey.includes('stars');
-  const methodName = humanPaymentMethodLabel(method);
+  const methodName =
+    buildPaymentMethodDisplay(methods ?? []).get(method.id)?.label ??
+    humanPaymentMethodLabel(method);
 
   const handleSubmit = () => {
     setError(null);

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { openLink as sdkOpenLink } from '@telegram-apps/sdk-react';
@@ -64,17 +64,23 @@ export default function ConnectPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Multi-tariff: which subscription to connect (`/connect?sub=N`, same param as
+  // upstream Connection). Without it the backend resolves the default one.
+  const [searchParams] = useSearchParams();
+  const subParam = Number(searchParams.get('sub'));
+  const subId = Number.isInteger(subParam) && subParam > 0 ? subParam : undefined;
+
   const {
     data: appConfig,
     isLoading,
     error,
   } = useQuery<AppConfig>({
-    queryKey: ['appConfig'],
-    queryFn: () => subscriptionApi.getAppConfig(),
+    queryKey: ['appConfig', subId],
+    queryFn: () => subscriptionApi.getAppConfig(subId),
   });
   const { data: connectionLink, isLoading: linkLoading } = useQuery({
-    queryKey: ['connectionLink'],
-    queryFn: () => subscriptionApi.getConnectionLink(),
+    queryKey: ['connectionLink', subId],
+    queryFn: () => subscriptionApi.getConnectionLink(subId),
     retry: false,
     staleTime: 0,
   });

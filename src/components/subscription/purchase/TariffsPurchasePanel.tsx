@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -97,9 +97,24 @@ export function TariffsPurchasePanel({
     [tariffs, isMultiTariff, subscription?.is_trial, subscription?.tariff_id],
   );
 
+  // ── Resume: the order saved before a top-up (§4) ───────────────
+  // Read once on mount. It stays authoritative for the restored tariff until the
+  // user picks another tariff/period: the reseed/reset effects below run again
+  // whenever the selected tariff changes and would otherwise overwrite it.
+  const [resumeCart] = useState(() => {
+    if (!isResume) return null;
+    const cart = loadPurchaseCart();
+    if (!cart || cart.mode !== 'tariff' || !cart.tariffId) return null;
+    return buyableTariffs.some((tr) => tr.id === cart.tariffId) ? cart : null;
+  });
+  const pendingResume = useRef(resumeCart);
+  const dropResume = () => {
+    pendingResume.current = null;
+  };
+
   // ── Selected tariff (auto-select when there's no real choice) ───
   const [selectedTariffId, setSelectedTariffId] = useState<number | null>(
-    () => buyableTariffs[0]?.id ?? null,
+    () => resumeCart?.tariffId ?? buyableTariffs[0]?.id ?? null,
   );
   const selectedTariff =
     buyableTariffs.find((tr) => tr.id === selectedTariffId) ?? buyableTariffs[0] ?? null;
@@ -139,8 +154,14 @@ export function TariffsPurchasePanel({
 
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
 
-  // Re-seed period when tariff (or its periods) change.
+  // Re-seed period when tariff (or its periods) change — unless it's the
+  // tariff restored from the saved order.
   useEffect(() => {
+    const cart = pendingResume.current;
+    if (cart && cart.tariffId === selectedTariff?.id && cart.periodDays) {
+      setSelectedDays(cart.periodDays);
+      return;
+    }
     setSelectedDays(bestValueDays);
   }, [selectedTariff?.id, bestValueDays]);
 
@@ -152,8 +173,15 @@ export function TariffsPurchasePanel({
   const [useCustomTraffic, setUseCustomTraffic] = useState(false);
   const [customTrafficGb, setCustomTrafficGb] = useState(50);
 
-  // Reset advanced state on tariff change.
+  // Reset advanced state on tariff change (restored order keeps its traffic).
   useEffect(() => {
+    const cart = pendingResume.current;
+    if (cart && cart.tariffId === selectedTariff?.id && cart.trafficGb) {
+      setShowAdvanced(true);
+      setUseCustomTraffic(true);
+      setCustomTrafficGb(cart.trafficGb);
+      return;
+    }
     setShowAdvanced(false);
     setUseCustomTraffic(false);
     setCustomTrafficGb(selectedTariff?.min_traffic_gb ?? 50);
@@ -214,23 +242,7 @@ export function TariffsPurchasePanel({
 
   useCloseOnSuccessNotification(() => clearPurchaseCart());
 
-  // ── Resume: restore saved order after top-up return ─────────────
-  useEffect(() => {
-    if (!isResume) return;
-    const cart = loadPurchaseCart();
-    if (!cart || cart.mode !== 'tariff' || !cart.tariffId) return;
-    if (buyableTariffs.some((tr) => tr.id === cart.tariffId)) {
-      setSelectedTariffId(cart.tariffId);
-      if (cart.periodDays) setSelectedDays(cart.periodDays);
-      if (cart.trafficGb) {
-        setUseCustomTraffic(true);
-        setShowAdvanced(true);
-        setCustomTrafficGb(cart.trafficGb);
-      }
-    }
-    // Decision 1: restore + leave the pay bar ready (no silent auto-pay).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isResume]);
+  // Decision 1: the restored order only pre-fills the bar — no silent auto-pay.
 
   // ── Pay-bar actions ─────────────────────────────────────────────
   // A balance-aware bar means we only ever reach the pay mutation when
@@ -279,6 +291,7 @@ export function TariffsPurchasePanel({
         tariffs={tariffs}
         onClose={() => setSwitchTariffId(null)}
         onExpiredFallback={(tariff) => {
+          dropResume();
           setSwitchTariffId(null);
           setSelectedTariffId(tariff.id);
         }}
@@ -300,6 +313,7 @@ export function TariffsPurchasePanel({
                   type="button"
                   onClick={() => {
                     impact('light');
+                    dropResume();
                     setSelectedTariffId(tariff.id);
                   }}
                   aria-pressed={selected}
@@ -344,7 +358,10 @@ export function TariffsPurchasePanel({
           <PeriodSelector
             periods={periodChoices}
             value={selectedDays}
-            onChange={(c) => setSelectedDays(c.days)}
+            onChange={(c) => {
+              dropResume();
+              setSelectedDays(c.days);
+            }}
           />
         </div>
       )}

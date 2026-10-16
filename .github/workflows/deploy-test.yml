@@ -1,0 +1,75 @@
+# Автодеплой кабинета на тестовый стенд.
+# Кладётся в форк Cubafree/bedolaga-cabinet как .github/workflows/deploy-test.yml
+# (исходник лежит в rocketjump-infra/ci/cabinet/deploy-test.yml).
+#
+# Что делает: на каждый push в main собирает кабинет (npm ci && npm run build)
+# на машине GitHub и заливает готовую статику (dist/) на test-bot в /srv/cabinet.
+# На сервере ничего не собирается; если сборка упала — там остаётся старая версия.
+#
+# Нужно в репозитории (Settings → Secrets and variables → Actions):
+#   Secrets:   DEPLOY_HOST, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS
+#   Variables: VITE_TELEGRAM_BOT_USERNAME (обязательно), VITE_APP_NAME, VITE_APP_LOGO (по желанию)
+# Значения печатает в конце ansible-playbook playbooks/test-bot.yml.
+
+name: Deploy cabinet to test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}          # кнопка «Run workflow» для ручного запуска
+
+# Два пуша подряд — второй отменяет первый, на сервер едет только последний
+concurrency:
+  group: deploy-test
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # build = tsc (проверка типов) + vite build. Ошибка типов → деплоя не будет.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_TELEGRAM_BOT_USERNAME: ${{ vars.VITE_TELEGRAM_BOT_USERNAME }}
+          VITE_APP_NAME: ${{ vars.VITE_APP_NAME || 'RocketJump TEST' }}
+          VITE_APP_LOGO: ${{ vars.VITE_APP_LOGO || 'R' }}
+
+      - name: Check build output
+        run: test -f dist/index.html
+
+      - name: SSH key and host key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      # На сервере ключ привязан к rrsync: писать можно только в /srv/cabinet,
+      # путь назначения указывается относительно неё (пусто = сама папка).
+      # --checksum: сравнивать по содержимому, а не по размеру+времени
+      #   (иначе изменённый index.html того же размера мог не уехать).
+      # --delay-updates: новые файлы подменяются в самом конце — меньше «полусобранного» сайта.
+      - name: Upload to test server
+        run: >-
+          rsync -rltz --checksum --delete --delay-updates --chmod=D755,F644
+          -e "ssh -o StrictHostKeyChecking=yes"
+          dist/ deploy@${{ secrets.DEPLOY_HOST }}:
+
+      - name: Summary
+        run: echo "Задеплоен ${GITHUB_SHA::7} → test-bot" >> "$GITHUB_STEP_SUMMARY"

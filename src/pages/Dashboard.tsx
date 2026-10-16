@@ -97,21 +97,28 @@ export default function Dashboard() {
     },
   });
 
-  // Quick-renew (lifted from SubscriptionCardExpired) — 30-day renew from balance.
+  // Quick-renew (mirrors upstream SubscriptionCardExpired): only daily tariffs
+  // renew instantly (resume a paused daily / buy one more day). A regular
+  // subscription goes to the period picker — never charge a fixed month silently
+  // (it skips long-period discounts and fails when the tariff isn't sold monthly).
   const handleQuickRenew = async () => {
-    if (!subscription) {
-      navigate('/subscription/buy');
+    const isInstantRenew =
+      !!subscription &&
+      subscription.is_daily &&
+      (subscription.status === 'disabled' || !!subscription.tariff_id);
+    if (!subscription || !isInstantRenew) {
+      navigate(
+        subscription ? `/subscription/buy?subscriptionId=${subscription.id}` : '/subscription/buy',
+      );
       return;
     }
     setIsRenewing(true);
     setRenewError(null);
     try {
-      if (subscription.is_daily && subscription.status === 'disabled') {
+      if (subscription.status === 'disabled') {
         await subscriptionApi.togglePause(subscription.id);
-      } else if (subscription.is_daily && subscription.tariff_id) {
+      } else if (subscription.tariff_id) {
         await subscriptionApi.purchaseTariff(subscription.tariff_id, 1, undefined, subscription.id);
-      } else {
-        await subscriptionApi.renewSubscription(30, subscription.id);
       }
       queryClient.invalidateQueries({
         predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'subscription',
@@ -122,7 +129,7 @@ export default function Dashboard() {
     } catch (err: unknown) {
       if (getInsufficientBalanceError(err)) {
         // Not enough balance — send the user to renew/top-up rather than failing silently.
-        navigate(`/subscription/${subscription.id}/renew`);
+        navigate(`/subscription/buy?subscriptionId=${subscription.id}`);
         return;
       }
       if (err instanceof AxiosError && typeof err.response?.data?.detail === 'string') {

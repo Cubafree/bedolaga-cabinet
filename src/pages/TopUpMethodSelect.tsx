@@ -1,14 +1,11 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
 import { balanceApi } from '../api/balance';
 import { useCurrency } from '../hooks/useCurrency';
-import {
-  classifyPaymentMethod,
-  humanPaymentMethodLabel,
-  humanPaymentMethodHint,
-} from '../utils/paymentMethodLabel';
+import { buildPaymentMethodDisplay, classifyPaymentMethod } from '../utils/paymentMethodLabel';
 import { Kicker } from '@/components/ui/Kicker';
 import { WebBackButton } from '../components/WebBackButton';
 import { CardIcon, CryptoIcon, StarIcon, ChevronRightIcon, WalletIcon } from '@/components/icons';
@@ -32,6 +29,10 @@ export default function TopUpMethodSelect() {
     queryKey: ['payment-methods'],
     queryFn: balanceApi.getPaymentMethods,
   });
+  const methodDisplay = useMemo(
+    () => buildPaymentMethodDisplay(paymentMethods ?? []),
+    [paymentMethods],
+  );
 
   const handleMethodClick = (methodId: string) => {
     const params = new URLSearchParams();
@@ -67,8 +68,10 @@ export default function TopUpMethodSelect() {
         <div className="space-y-3">
           {paymentMethods.map((method) => {
             const kind = classifyPaymentMethod(method);
-            const label = humanPaymentMethodLabel(method);
-            const hint = humanPaymentMethodHint(method);
+            const { label, hint } = methodDisplay.get(method.id) ?? {
+              label: method.name,
+              hint: null,
+            };
             return (
               <button
                 key={method.id}
