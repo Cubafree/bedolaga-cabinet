@@ -35,6 +35,7 @@ import { ServerManagementSheet } from '../components/subscription/sheets/ServerM
 import { DeleteSubscriptionSheet } from '../components/subscription/sheets/DeleteSubscriptionSheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { safeLocal } from '@/utils/safeStorage';
+import { daysLeftRoundedUp } from '@/utils/daysLeft';
 
 /**
  * Подписка — details «моя подписка» (NOTES_IA §3.3, copy spec §C).
@@ -254,7 +255,7 @@ export default function SubscriptionDetail() {
     );
   }
 
-  const daysLeft = subscription?.days_left ?? 0;
+  const daysLeft = daysLeftRoundedUp(subscription);
   const isUnlimited = subscription ? subscription.traffic_limit_gb === 0 : false;
   const isLimited = subscription?.is_limited ?? false;
   const connectedDevices = devicesData?.total ?? 0;

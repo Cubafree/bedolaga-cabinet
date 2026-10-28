@@ -11,6 +11,7 @@ import {
   ArrowRightIcon,
 } from '@/components/icons';
 import { formatTraffic } from '@/utils/formatTraffic';
+import { daysLeftRoundedUp } from '@/utils/daysLeft';
 import { pluralizeDays } from '@/utils/pluralizeDays';
 import type { Subscription } from '@/types';
 
@@ -67,7 +68,7 @@ export default function StatusCard({
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const daysLeft = subscription?.days_left ?? 0;
+  const daysLeft = daysLeftRoundedUp(subscription);
   const isUnlimited = subscription ? subscription.traffic_limit_gb === 0 : false;
   const isLimited = subscription?.is_limited ?? false;
   const hasDevices = connectedDevices > 0;
