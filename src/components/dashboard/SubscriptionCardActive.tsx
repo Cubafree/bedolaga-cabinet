@@ -10,6 +10,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useTrafficZone } from '../../hooks/useTrafficZone';
 import { formatTraffic } from '../../utils/formatTraffic';
 import { getGlassColors } from '../../utils/glassTheme';
+import { daysLeftRoundedUp } from '../../utils/daysLeft';
 import { CalendarIcon, RefreshIcon, SparklesIcon } from '@/components/icons';
 import type { Subscription } from '../../types';
 
@@ -43,7 +44,7 @@ export default function SubscriptionCardActive({
   const animatedPercent = useAnimatedNumber(usedPercent);
 
   const formattedDate = new Date(subscription.end_date).toLocaleDateString(uiLocale());
-  const daysLeft = subscription.days_left;
+  const daysLeft = daysLeftRoundedUp(subscription);
 
   // Sparkline placeholder data (hidden until API provides daily usage)
   const dailyUsage: number[] = [];
