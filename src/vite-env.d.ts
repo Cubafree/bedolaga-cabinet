@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_TELEGRAM_BOT_USERNAME?: string;
   readonly VITE_APP_NAME?: string;
   readonly VITE_APP_LOGO?: string;
+  /** Comma-separated cabinet languages (e.g. `ru`); empty = all bundled locales. */
+  readonly VITE_LANGUAGES?: string;
   /** Optional override for the backend liveness URL (defaults to `<origin>/health/unified`). */
   readonly VITE_HEALTH_URL?: string;
 }

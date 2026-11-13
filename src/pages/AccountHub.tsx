@@ -19,13 +19,15 @@ import {
   PowerIcon,
 } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SUPPORTED_LANGS } from '@/i18n';
 
-const LANGS: { code: string; label: string }[] = [
+const ALL_LANGS: { code: string; label: string }[] = [
   { code: 'ru', label: 'РУС' },
   { code: 'en', label: 'EN' },
   { code: 'zh', label: '中文' },
   { code: 'fa', label: 'فارسی' },
 ];
+const LANGS = ALL_LANGS.filter((l) => SUPPORTED_LANGS.includes(l.code));
 
 const cardClass =
   'rounded-bento border border-champagne-300 bg-champagne-50 dark:border-dark-800 dark:bg-dark-900';
@@ -233,22 +235,24 @@ export default function AccountHub() {
       {/* ── Настройки ── */}
       <SectionLabel>{t('account.settings.title')}</SectionLabel>
       <section className={`p-5 ${cardClass}`}>
-        <div>
-          <div className="text-xs text-champagne-600 dark:text-dark-400">
-            {t('account.settings.language')}
+        {LANGS.length > 1 && (
+          <div>
+            <div className="text-xs text-champagne-600 dark:text-dark-400">
+              {t('account.settings.language')}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LANGS.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => i18n.changeLanguage(l.code)}
+                  className={pillClass(Boolean(i18n.language?.startsWith(l.code)))}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {LANGS.map((l) => (
-              <button
-                key={l.code}
-                onClick={() => i18n.changeLanguage(l.code)}
-                className={pillClass(Boolean(i18n.language?.startsWith(l.code)))}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         {canToggle && (
           <div className="mt-4">
