@@ -10,7 +10,15 @@ const localeLoaders: Record<string, () => Promise<{ default: ResourceLanguage }>
   fa: () => import('./locales/fa.json'),
 };
 
-const SUPPORTED_LANGS = Object.keys(localeLoaders);
+// VITE_LANGUAGES (build-time, через запятую) сужает набор языков кабинета: при `ru`
+// детектор браузера/Telegram не переключит интерфейс на английский. Пусто — все.
+const ENABLED_LANGS = (import.meta.env.VITE_LANGUAGES ?? '')
+  .split(',')
+  .map((code) => code.trim())
+  .filter((code) => code in localeLoaders);
+
+export const SUPPORTED_LANGS =
+  ENABLED_LANGS.length > 0 ? ENABLED_LANGS : Object.keys(localeLoaders);
 const FALLBACK_LNG = 'ru';
 const LANGUAGE_STORAGE_KEY = 'cabinet_language';
 

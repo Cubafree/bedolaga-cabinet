@@ -49,6 +49,7 @@ jobs:
           VITE_TELEGRAM_BOT_USERNAME: ${{ vars.VITE_TELEGRAM_BOT_USERNAME }}
           VITE_APP_NAME: ${{ vars.VITE_APP_NAME || 'RocketJump TEST' }}
           VITE_APP_LOGO: ${{ vars.VITE_APP_LOGO || 'R' }}
+          VITE_LANGUAGES: ${{ vars.VITE_LANGUAGES || 'ru' }}
 
       - name: Check build output
         run: test -f dist/index.html
